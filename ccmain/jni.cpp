@@ -23,8 +23,12 @@
 #include "varable.h"
 #include "tessvars.h"
 
+#define DEBUG 1
+
+#if DEBUG
 BOOL_VAR (tessedit_write_images, TRUE,
                  "Capture the image from the IPE");
+#endif
 
 #define LOG_TAG "OcrLib"
 #include <utils/Log.h>
@@ -65,10 +69,11 @@ ocr_open(JNIEnv *env, jobject thiz, jstring lang)
 jstring
 ocr_recognize(JNIEnv *env, jobject thiz,
               jbyteArray image,
-              jint width, jint height, jint rowWidth)
+              jint width, jint height, 
+              jint bpp,
+              jint rowWidth)
 {
-    int x = width, y = height, rw = rowWidth;
-	LOGI("recognize image x=%d, y=%d, rw=%d\n", x, y, rw);
+	LOGI("recognize image x=%d, y=%d, rw=%d\n", width, height, rowWidth);
 
     if (env->GetArrayLength(image) < width * height) {
         LOGE("image length = %ld is less than width * height = %ld!",
@@ -77,15 +82,17 @@ ocr_recognize(JNIEnv *env, jobject thiz,
     }
 
     jbyte* buffer = env->GetByteArrayElements(image, NULL);
-	api.SetImage((const unsigned char *)buffer, x, y, 1, rw);
+	api.SetImage((const unsigned char *)buffer,
+                 width, height, bpp, rowWidth);
 	char * text = api.GetUTF8Text();
     env->ReleaseByteArrayElements(image, buffer, JNI_ABORT);
 
+#if DEBUG
 	if (tessedit_write_images) {
 		page_image.write("/data/tessinput.tif");
 	}
 
-    if (text) { // debug
+    if (text) {
         const char *outfile = "/data/out.txt";
         LOGI("write to output %s\n", outfile);
         FILE* fp = fopen(outfile, "w");
@@ -94,6 +101,7 @@ ocr_recognize(JNIEnv *env, jobject thiz,
             fclose(fp);
         }
     }
+#endif
 
     // Will that work on a NULL?
     return env->NewStringUTF(text);
@@ -107,7 +115,7 @@ ocr_close(JNIEnv *env, jobject thiz)
 
 static JNINativeMethod methods[] = {
     {"open", "(Ljava/lang/String;)Z", (void*)ocr_open},
-    {"recognize", "([BIII)Ljava/lang/String;", (void*)ocr_recognize},
+    {"recognize", "([BIIII)Ljava/lang/String;", (void*)ocr_recognize},
     {"close", "()V", (void*)ocr_close},
 };
 
