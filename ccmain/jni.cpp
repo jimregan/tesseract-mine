@@ -51,8 +51,8 @@ ocr_open(JNIEnv *env, jobject thiz, jstring lang)
 
     jboolean res = JNI_TRUE;
 
-	LOGI("lang %s\n", c_lang);
-	if (api.Init("/sdcard/", c_lang)) {
+    LOGI("lang %s\n", c_lang);
+    if (api.Init("/sdcard/", c_lang)) {
         LOGE("could not initialize tesseract!");
         res = JNI_FALSE;
     }
@@ -60,6 +60,7 @@ ocr_open(JNIEnv *env, jobject thiz, jstring lang)
         LOGE("could not read config file, using defaults!");
         // This is not a fatal error.
     }
+    LOGI("lang %s initialization complete\n", c_lang);
 
     env->ReleaseStringUTFChars(lang, c_lang);
     LOGI("successfully initialized tesseract!");
