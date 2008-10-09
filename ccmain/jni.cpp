@@ -249,12 +249,11 @@ static void
 ocr_close(JNIEnv *env, jobject thiz)
 {
     LOGI("quit");
-
     // Close down tesseract and free up all memory. End() is equivalent to
     // destructing and reconstructing your TessBaseAPI.  Once End() has been
     // used, none of the other API functions may be used other than Init and
     // anything declared above it in the class definition.
-//    api.End(); --> causes a crash
+    api.End();
 }
 
 static void
