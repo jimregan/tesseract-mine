@@ -27,19 +27,31 @@
 #if DEBUG
 #include <stdio.h>
 BOOL_VAR (tessedit_write_images, TRUE,
-                 "Capture the image from the IPE");
+          "Capture the image from the IPE");
 #endif
 
-#define LOG_TAG "OcrLib"
+#define LOG_TAG "OcrLib(native)"
 #include <utils/Log.h>
 
-static tesseract::TessBaseAPI  api;
-static jbyteArray image_obj;
-static jbyte* image_buffer;
+static jfieldID field_mNativeData;
+
+struct native_data_t {
+    tesseract::TessBaseAPI api;
+    jbyteArray image_obj;
+    jbyte* image_buffer;
+};
+
+static inline native_data_t * get_native_data(JNIEnv *env, jobject object) {
+    return (native_data_t *)(env->GetIntField(object, field_mNativeData));
+}
 
 jboolean
 ocr_open(JNIEnv *env, jobject thiz, jstring lang)
 {
+    LOGV(__FUNCTION__);
+
+    native_data_t *nat = get_native_data(env, thiz);
+
     if (lang == NULL) {
         LOGE("lang string is null!");
         return JNI_FALSE;
@@ -54,12 +66,12 @@ ocr_open(JNIEnv *env, jobject thiz, jstring lang)
     jboolean res = JNI_TRUE;
 
     LOGI("lang %s\n", c_lang);
-    if (api.Init("/sdcard/", c_lang)) {
+    if (nat->api.Init("/sdcard/", c_lang)) {
         LOGE("could not initialize tesseract!");
         res = JNI_FALSE;
     }
 #if DEBUG
-    else if (!api.ReadConfigFile("/sdcard/tessdata/ratings")) {
+    else if (!nat->api.ReadConfigFile("/sdcard/tessdata/ratings")) {
         LOGE("could not read config file, using defaults!");
         // This is not a fatal error.
     }
@@ -102,7 +114,11 @@ ocr_recognize_image(JNIEnv *env, jobject thiz,
                     jint bpp,
                     jint rowWidth)
 {
+    LOGV(__FUNCTION__);
+
 	LOGI("recognize image x=%d, y=%d, rw=%d\n", width, height, rowWidth);
+
+    native_data_t *nat = get_native_data(env, thiz);
 
     if (env->GetArrayLength(image) < width * height) {
         LOGE("image length = %d is less than width * height = %d!",
@@ -111,9 +127,9 @@ ocr_recognize_image(JNIEnv *env, jobject thiz,
     }
 
     jbyte* buffer = env->GetByteArrayElements(image, NULL);
-	api.SetImage((const unsigned char *)buffer,
+	nat->api.SetImage((const unsigned char *)buffer,
                  width, height, bpp, rowWidth);
-	char * text = api.GetUTF8Text();
+	char * text = nat->api.GetUTF8Text();
     env->ReleaseByteArrayElements(image, buffer, JNI_ABORT);
 
     dump_debug_data(text);
@@ -129,11 +145,15 @@ ocr_set_image(JNIEnv *env, jobject thiz,
               jint bpp,
               jint rowWidth)
 {
-    LOG_ASSERT(image_obj == NULL && image_buffer == NULL,
+    LOGV(__FUNCTION__);
+    LOG_ASSERT(nat->image_obj == NULL && nat->image_buffer == NULL,
                "image and/or image_buffer are not NULL!");
-    image_obj = (jbyteArray)env->NewGlobalRef(image);
-    image_buffer = env->GetByteArrayElements(image_obj, NULL);
-	api.SetImage((const unsigned char *)image_buffer,
+
+    native_data_t *nat = get_native_data(env, thiz);
+
+    nat->image_obj = (jbyteArray)env->NewGlobalRef(image);
+    nat->image_buffer = env->GetByteArrayElements(nat->image_obj, NULL);
+	nat->api.SetImage((const unsigned char *)nat->image_buffer,
                  width, height, bpp, rowWidth);
 }
 
@@ -142,12 +162,15 @@ ocr_set_rectangle(JNIEnv *env, jobject thiz,
                   jint left, jint top, 
                   jint width, jint height)
 {
+    LOGV(__FUNCTION__);
     // Restrict recognition to a sub-rectangle of the image. Call after SetImage.
     // Each SetRectangle clears the recogntion results so multiple rectangles
     // can be recognized with the same image.
-    LOG_ASSERT(image_obj != NULL && image_buffer != NULL,
+    native_data_t *nat = get_native_data(env, thiz);
+
+    LOG_ASSERT(nat->image_obj != NULL && nat->image_buffer != NULL,
                "image and/or image_buffer are NULL!");
-    api.SetRectangle(left, top, width, height);
+    nat->api.SetRectangle(left, top, width, height);
 }
 
 jstring
@@ -156,10 +179,14 @@ ocr_recognize(JNIEnv *env, jobject thiz,
               jint bpp,
               jint rowWidth)
 {
-    LOG_ASSERT(image_obj != NULL && image_buffer != NULL,
+    LOGV(__FUNCTION__);
+
+    native_data_t *nat = get_native_data(env, thiz);
+
+    LOG_ASSERT(nat->image_obj != NULL && nat->image_buffer != NULL,
                "image and/or image_buffer are NULL!");
 
-	char * text = api.GetUTF8Text();
+	char * text = nat->api.GetUTF8Text();
 
     dump_debug_data(text);
 
@@ -170,18 +197,22 @@ ocr_recognize(JNIEnv *env, jobject thiz,
 static jint
 ocr_mean_confidence(JNIEnv *env, jobject thiz)
 {
+    LOGV(__FUNCTION__);
+    native_data_t *nat = get_native_data(env, thiz);
     // Returns the (average) confidence value between 0 and 100.
-    return api.MeanTextConf();
+    return nat->api.MeanTextConf();
 }
 
 static jintArray
 ocr_word_confidences(JNIEnv *env, jobject thiz)
 {
+    LOGV(__FUNCTION__);
     // Returns all word confidences (between 0 and 100) in an array, terminated
     // by -1.  The calling function must delete [] after use.
     // The number of confidences should correspond to the number of space-
     // delimited words in GetUTF8Text.
-    int* confs = api.AllWordConfidences();
+    native_data_t *nat = get_native_data(env, thiz);
+    int* confs = nat->api.AllWordConfidences();
     LOG_ASSERT(confs != NULL, "Could not get word-confidence values!");
 
     int len, *trav;
@@ -203,6 +234,7 @@ static void
 ocr_set_variable(JNIEnv *env, jobject thiz,
                  jstring var, jstring value)
 {
+    LOGV(__FUNCTION__);
     // Set the value of an internal "variable" (of either old or new types).
     // Supply the name of the variable and the value as a string, just as
     // you would in a config file.
@@ -211,11 +243,13 @@ ocr_set_variable(JNIEnv *env, jobject thiz,
     // Or SetVariable("bln_numericmode", "1"); to set numeric-only mode.
     // SetVariable may be used before Init, but settings will revert to
     // defaults on End().
+
+    native_data_t *nat = get_native_data(env, thiz);
     
     const char *c_var  = env->GetStringUTFChars(var, NULL);
     const char *c_value  = env->GetStringUTFChars(value, NULL);
 
-    api.SetVariable(c_var, c_value);
+    nat->api.SetVariable(c_var, c_value);
 
     env->ReleaseStringUTFChars(var, c_var);
     env->ReleaseStringUTFChars(value, c_value);
@@ -224,46 +258,79 @@ ocr_set_variable(JNIEnv *env, jobject thiz,
 static void
 ocr_clear_results(JNIEnv *env, jobject thiz)
 {
+    LOGV(__FUNCTION__);
     // Free up recognition results and any stored image data, without actually
     // freeing any recognition data that would be time-consuming to reload.
     // Afterwards, you must call SetImage or TesseractRect before doing
     // any Recognize or Get* operation.
     LOGI("releasing all memory");
-    api.Clear();
+    native_data_t *nat = get_native_data(env, thiz);
+    nat->api.Clear();
 
     // Call between pages or documents etc to free up memory and forget
     // adaptive data.
     LOGI("clearing adaptive classifier");
-    api.ClearAdaptiveClassifier();
+    nat->api.ClearAdaptiveClassifier();
 
-    if (image_buffer != NULL) {
+    if (nat->image_buffer != NULL) {
         LOGI("releasing image buffer");
-        env->ReleaseByteArrayElements(image_obj, image_buffer, JNI_ABORT);
-        env->DeleteGlobalRef(image_obj);
-        image_obj = NULL;
-        image_buffer = NULL;
+        env->ReleaseByteArrayElements(nat->image_obj,
+                                      nat->image_buffer, JNI_ABORT);
+        env->DeleteGlobalRef(nat->image_obj);
+        nat->image_obj = NULL;
+        nat->image_buffer = NULL;
     }
 }
 
 static void
 ocr_close(JNIEnv *env, jobject thiz)
 {
-    LOGI("quit");
+    LOGV(__FUNCTION__);
     // Close down tesseract and free up all memory. End() is equivalent to
     // destructing and reconstructing your TessBaseAPI.  Once End() has been
     // used, none of the other API functions may be used other than Init and
     // anything declared above it in the class definition.
-    api.End();
+    native_data_t *nat = get_native_data(env, thiz);
+    nat->api.End();
 }
 
 static void
 ocr_set_page_seg_mode(JNIEnv *env, jobject thiz, jint mode)
 {
-    // Set the current page segmentation mode. Defaults to PSM_AUTO.
-    // api.SetPageSegMode((tesseract::PageSegMode)mode);
+    LOGV(__FUNCTION__);
+    native_data_t *nat = get_native_data(env, thiz);
+    nat->api.SetPageSegMode((tesseract::PageSegMode)mode);
+}
+
+static void class_init(JNIEnv* env, jclass clazz) {
+    LOGV(__FUNCTION__);
+    field_mNativeData = env->GetFieldID(clazz, "mNativeData", "I");
+}
+
+static void initialize_native_data(JNIEnv* env, jobject object) {
+    LOGV(__FUNCTION__);
+    native_data_t *nat = new native_data_t;
+    if (nat == NULL) {
+        LOGE("%s: out of memory!", __FUNCTION__);
+        return;
+    }
+
+    env->SetIntField(object, field_mNativeData, (jint)nat);
+}
+
+static void cleanup_native_data(JNIEnv* env, jobject object) {
+    LOGV(__FUNCTION__);
+    native_data_t *nat = get_native_data(env, object);
+    if (nat)
+        delete nat;
 }
 
 static JNINativeMethod methods[] = {
+     /* name, signature, funcPtr */
+    {"classInitNative", "()V", (void*)class_init},
+    {"initializeNativeDataNative", "()V", (void *)initialize_native_data},
+    {"cleanupNativeDataNative", "()V", (void *)cleanup_native_data},
+
     {"openNative", "(Ljava/lang/String;)Z", (void*)ocr_open},
     {"setImageNative", "([BIIII)V", (void*)ocr_set_image},
     {"setRectangleNative", "(IIII)V", (void*)ocr_set_rectangle},
