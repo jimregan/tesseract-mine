@@ -260,7 +260,7 @@ static void
 ocr_set_page_seg_mode(JNIEnv *env, jobject thiz, jint mode)
 {
     // Set the current page segmentation mode. Defaults to PSM_AUTO.
-    api.SetPageSegMode((tesseract::PageSegMode)mode);
+    // api.SetPageSegMode((tesseract::PageSegMode)mode);
 }
 
 static JNINativeMethod methods[] = {
