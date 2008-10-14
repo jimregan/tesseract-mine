@@ -30,12 +30,14 @@ BOOL_VAR (tessedit_write_images, TRUE,
           "Capture the image from the IPE");
 #endif
 
+#define LOG_NDEBUG 0
 #define LOG_TAG "OcrLib(native)"
 #include <utils/Log.h>
 
 static jfieldID field_mNativeData;
 
 struct native_data_t {
+    native_data_t() : image_obj(NULL), image_buffer(NULL) {}
     tesseract::TessBaseAPI api;
     jbyteArray image_obj;
     jbyte* image_buffer;
@@ -44,6 +46,98 @@ struct native_data_t {
 static inline native_data_t * get_native_data(JNIEnv *env, jobject object) {
     return (native_data_t *)(env->GetIntField(object, field_mNativeData));
 }
+
+#if DEBUG
+
+#include <string.h>
+#include <errno.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+
+#define FAILIF(cond, msg...) do {                 \
+        if (cond) { 	                          \
+	        LOGE("%s(%d): ", __FILE__, __LINE__); \
+            LOGE(msg);                            \
+            return;                               \
+        }                                         \
+} while(0)
+
+void test_ocr(const char *infile, int x, int y, int bpp,
+              const char *outfile, const char *lang,
+              const char *ratings, const char *tessdata)
+{
+	void *buffer;
+	struct stat s;
+	int ifd, ofd;
+
+	LOGI("input file %s\n", infile);
+	ifd = open(infile, O_RDONLY);
+	FAILIF(ifd < 0, "open(%s): %s\n", infile, strerror(errno));
+	FAILIF(fstat(ifd, &s) < 0, "fstat(%d): %s\n", ifd, strerror(errno));
+	LOGI("file size %lld\n", s.st_size);
+	buffer = mmap(NULL, s.st_size, PROT_READ, MAP_PRIVATE, ifd, 0);
+	FAILIF(buffer == MAP_FAILED, "mmap(): %s\n", strerror(errno));
+	LOGI("infile mmapped at %p\n", buffer);
+	FAILIF(!tessdata, "You must specify a path for tessdata.\n");
+
+	tesseract::TessBaseAPI  api;
+
+	LOGI("tessdata %s\n", tessdata);
+	LOGI("lang %s\n", lang);
+	FAILIF(api.Init(tessdata, lang), "could not initialize tesseract\n");
+	if (ratings) {
+		LOGI("ratings %s\n", ratings);
+		FAILIF(false == api.ReadConfigFile(ratings),
+			"could not read config file\n");
+	}
+
+	LOGI("set image x=%d, y=%d bpp=%d\n", x, y, bpp);
+	FAILIF(!bpp || bpp == 2 || bpp > 4, 
+		"Invalid value %d of bpp\n", bpp);
+	api.SetImage((const unsigned char *)buffer, x, y, bpp, bpp*x); 
+
+	LOGI("set rectangle to cover entire image\n");
+	api.SetRectangle(0, 0, x, y);
+
+	LOGI("set page seg mode to single character\n");
+	api.SetPageSegMode(tesseract::PSM_SINGLE_CHAR);
+	LOGI("recognize\n");
+	char * text = api.GetUTF8Text();
+	if (tessedit_write_images) {
+		page_image.write("tessinput.tif");
+	}
+	FAILIF(text == NULL, "didn't recognize\n");
+
+	FILE* fp = fopen(outfile, "w");
+	if (fp != NULL) {
+        LOGI("write to output %s\n", outfile);
+		fwrite(text, strlen(text), 1, fp);
+		fclose(fp);
+	}
+    else LOGI("could not write to output %s\n", outfile);
+
+	int mean_confidence = api.MeanTextConf();
+	LOGI("mean confidence: %d\n", mean_confidence);
+
+	int* confs = api.AllWordConfidences();
+	int len, *trav;
+	for (len = 0, trav = confs; *trav != -1; trav++, len++)
+		LOGI("confidence %d: %d\n", len, *trav);
+	free(confs);
+
+	LOGI("clearing api\n");
+	api.Clear();
+	LOGI("clearing adaptive classifier\n");
+	api.ClearAdaptiveClassifier();
+
+	LOGI("clearing text\n");
+	delete [] text;
+}
+#endif
 
 jboolean
 ocr_open(JNIEnv *env, jobject thiz, jstring lang)
@@ -84,9 +178,9 @@ ocr_open(JNIEnv *env, jobject thiz, jstring lang)
     return res;
 }
 
-#if DEBUG
 static void dump_debug_data(char *text)
 {
+#if DEBUG
 	if (tessedit_write_images) {
 		page_image.write("/data/tessinput.tif");
 	}
@@ -100,23 +194,18 @@ static void dump_debug_data(char *text)
             fclose(fp);
         }
     }
-}
-#else
-static void dump_debug_data(char *text __attribute__((unused)))
-{
-}
 #endif
+}
 
 jstring
 ocr_recognize_image(JNIEnv *env, jobject thiz,
                     jbyteArray image,
                     jint width, jint height, 
-                    jint bpp,
-                    jint rowWidth)
+                    jint bpp)
 {
     LOGV(__FUNCTION__);
 
-	LOGI("recognize image x=%d, y=%d, rw=%d\n", width, height, rowWidth);
+	LOGI("recognize image x=%d, y=%d bpp=%d\n", width, height, bpp);
 
     native_data_t *nat = get_native_data(env, thiz);
 
@@ -128,7 +217,7 @@ ocr_recognize_image(JNIEnv *env, jobject thiz,
 
     jbyte* buffer = env->GetByteArrayElements(image, NULL);
 	nat->api.SetImage((const unsigned char *)buffer,
-                 width, height, bpp, rowWidth);
+                 width, height, bpp, bpp*width);
 	char * text = nat->api.GetUTF8Text();
     env->ReleaseByteArrayElements(image, buffer, JNI_ABORT);
 
@@ -142,19 +231,24 @@ void
 ocr_set_image(JNIEnv *env, jobject thiz,
               jbyteArray image,
               jint width, jint height, 
-              jint bpp,
-              jint rowWidth)
+              jint bpp)
 {
     LOGV(__FUNCTION__);
-    LOG_ASSERT(nat->image_obj == NULL && nat->image_buffer == NULL,
-               "image and/or image_buffer are not NULL!");
+
+	LOGI("set image x=%d, y=%d, bpp=%d\n", width, height, bpp);
 
     native_data_t *nat = get_native_data(env, thiz);
 
+    LOG_ASSERT(nat->image_obj == NULL && nat->image_buffer == NULL,
+               "image %p and/or image_buffer %p are not NULL!",
+               nat->image_obj,
+               nat->image_buffer);
+
     nat->image_obj = (jbyteArray)env->NewGlobalRef(image);
     nat->image_buffer = env->GetByteArrayElements(nat->image_obj, NULL);
+    LOG_ASSERT(nat->image_buffer != NULL, "image buffer is NULL!");
 	nat->api.SetImage((const unsigned char *)nat->image_buffer,
-                 width, height, bpp, rowWidth);
+                      width, height, bpp, bpp*width);
 }
 
 void
@@ -168,16 +262,16 @@ ocr_set_rectangle(JNIEnv *env, jobject thiz,
     // can be recognized with the same image.
     native_data_t *nat = get_native_data(env, thiz);
 
+	LOGI("set rectangle left=%d, top=%d, width=%d, height=%d\n",
+         left, top, width, height);
+
     LOG_ASSERT(nat->image_obj != NULL && nat->image_buffer != NULL,
                "image and/or image_buffer are NULL!");
     nat->api.SetRectangle(left, top, width, height);
 }
 
 jstring
-ocr_recognize(JNIEnv *env, jobject thiz,
-              jint width, jint height, 
-              jint bpp,
-              jint rowWidth)
+ocr_recognize(JNIEnv *env, jobject thiz)
 {
     LOGV(__FUNCTION__);
 
@@ -186,7 +280,9 @@ ocr_recognize(JNIEnv *env, jobject thiz,
     LOG_ASSERT(nat->image_obj != NULL && nat->image_buffer != NULL,
                "image and/or image_buffer are NULL!");
 
+    LOGI("BEFORE RECOGNIZE");
 	char * text = nat->api.GetUTF8Text();
+    LOGI("AFTER RECOGNIZE");
 
     dump_debug_data(text);
 
@@ -305,6 +401,11 @@ ocr_set_page_seg_mode(JNIEnv *env, jobject thiz, jint mode)
 static void class_init(JNIEnv* env, jclass clazz) {
     LOGV(__FUNCTION__);
     field_mNativeData = env->GetFieldID(clazz, "mNativeData", "I");
+#if DEBUG && 0
+    test_ocr("/sdcard/chi.yuv", 106, 106, 1,
+             "/sdcard/out.txt", "chi_sim0",
+             "/sdcard/tessdata/ratings", "/sdcard/");
+#endif
 }
 
 static void initialize_native_data(JNIEnv* env, jobject object) {
@@ -332,10 +433,10 @@ static JNINativeMethod methods[] = {
     {"cleanupNativeDataNative", "()V", (void *)cleanup_native_data},
 
     {"openNative", "(Ljava/lang/String;)Z", (void*)ocr_open},
-    {"setImageNative", "([BIIII)V", (void*)ocr_set_image},
+    {"setImageNative", "([BIII)V", (void*)ocr_set_image},
     {"setRectangleNative", "(IIII)V", (void*)ocr_set_rectangle},
     {"recognizeNative", "()Ljava/lang/String;", (void*)ocr_recognize},
-    {"recognizeNative", "([BIIII)Ljava/lang/String;", (void*)ocr_recognize_image},
+    {"recognizeNative", "([BIII)Ljava/lang/String;", (void*)ocr_recognize_image},
     {"clearResultsNative", "()V", (void*)ocr_clear_results},
     {"closeNative", "()V", (void*)ocr_close},
     {"meanConfidenceNative", "()I", (void*)ocr_mean_confidence},
