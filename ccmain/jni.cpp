@@ -182,11 +182,11 @@ static void dump_debug_data(char *text)
 {
 #if DEBUG
 	if (tessedit_write_images) {
-		page_image.write("/data/tessinput.tif");
+		page_image.write("/sdcard/tessinput.tif");
 	}
 
     if (text) {
-        const char *outfile = "/data/out.txt";
+        const char *outfile = "/sdcard/out.txt";
         LOGI("write to output %s\n", outfile);
         FILE* fp = fopen(outfile, "w");
         if (fp != NULL) {
