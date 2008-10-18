@@ -17,6 +17,8 @@
 
 #include <nativehelper/jni.h>
 #include <assert.h>
+#include <dirent.h>
+#include <ctype.h>
 
 #include "baseapi.h"
 #include "varable.h"
@@ -34,6 +36,8 @@ BOOL_VAR (tessedit_write_images, TRUE,
 #define LOG_TAG "OcrLib(native)"
 #include <utils/Log.h>
 
+#define TESSBASE "/sdcard/"
+
 static jfieldID field_mNativeData;
 
 struct native_data_t {
@@ -45,6 +49,79 @@ struct native_data_t {
 
 static inline native_data_t * get_native_data(JNIEnv *env, jobject object) {
     return (native_data_t *)(env->GetIntField(object, field_mNativeData));
+}
+
+struct language_info_t {
+    language_info_t(char *lang, int shards) : 
+        lang(strdup(lang)), shards(shards) { }
+    ~language_info_t() { free(lang); }
+    language_info_t *next;
+    char *lang;
+    int shards;
+};
+static struct language_info_t *languages;
+static int num_languages;
+
+static language_info_t* find_language(const char *lang)
+{
+    LOGV(__FUNCTION__);
+    language_info_t *trav = languages;
+    while (trav) {
+        if (!strcmp(trav->lang, lang)) {
+            return trav;
+        }
+        trav = trav->next;
+    }
+    return NULL;
+}
+
+static void add_language(char *lang, int shards)
+{
+    LOGV(__FUNCTION__);
+    language_info_t *trav = find_language(lang);
+    if (trav) {
+        if (shards > trav->shards) {
+            LOGI("UPDATE LANG %s SHARDS %d", lang, shards);
+            trav->shards = shards;
+        }
+        return;
+    }
+    LOGI("ADD NEW LANG %s SHARDS %d", lang, shards);
+    trav = new language_info_t(lang, shards);
+    trav->next = languages;
+    languages = trav;
+    num_languages++;
+}
+
+static void free_languages()
+{
+    LOGV(__FUNCTION__);
+    language_info_t *trav = languages, *old;
+    while (trav) {
+        old = trav;
+        LOGI("FREE LANG %s\n", trav->lang);
+        trav = trav->next;
+        delete old;
+    }
+    num_languages = 0;
+}
+
+static int get_num_languages() {
+    return num_languages;
+}
+
+static language_info_t *iter;
+static language_info_t* language_iter_init()
+{
+    iter = languages;
+    return iter;
+}
+
+static language_info_t* language_iter_next()
+{
+    if (iter)
+        iter = iter->next;
+    return iter;
 }
 
 #if DEBUG
@@ -160,12 +237,12 @@ ocr_open(JNIEnv *env, jobject thiz, jstring lang)
     jboolean res = JNI_TRUE;
 
     LOGI("lang %s\n", c_lang);
-    if (nat->api.Init("/sdcard/", c_lang)) {
+    if (nat->api.Init(TESSBASE, c_lang)) {
         LOGE("could not initialize tesseract!");
         res = JNI_FALSE;
     }
 #if DEBUG
-    else if (!nat->api.ReadConfigFile("/sdcard/tessdata/ratings")) {
+    else if (!nat->api.ReadConfigFile(TESSBASE "tessdata/ratings")) {
         LOGE("could not read config file, using defaults!");
         // This is not a fatal error.
     }
@@ -182,11 +259,11 @@ static void dump_debug_data(char *text)
 {
 #if DEBUG
 	if (tessedit_write_images) {
-		page_image.write("/sdcard/tessinput.tif");
+		page_image.write(TESSBASE "tessinput.tif");
 	}
 
     if (text) {
-        const char *outfile = "/sdcard/out.txt";
+        const char *outfile = TESSBASE "out.txt";
         LOGI("write to output %s\n", outfile);
         FILE* fp = fopen(outfile, "w");
         if (fp != NULL) {
@@ -252,6 +329,21 @@ ocr_set_image(JNIEnv *env, jobject thiz,
 }
 
 void
+ocr_release_image(JNIEnv *env, jobject thiz)
+{
+    LOGV(__FUNCTION__);
+    native_data_t *nat = get_native_data(env, thiz);
+    if (nat->image_buffer != NULL) {
+        LOGI("releasing image buffer");
+        env->ReleaseByteArrayElements(nat->image_obj,
+                                      nat->image_buffer, JNI_ABORT);
+        env->DeleteGlobalRef(nat->image_obj);
+        nat->image_obj = NULL;
+        nat->image_buffer = NULL;
+    }
+}
+
+void
 ocr_set_rectangle(JNIEnv *env, jobject thiz,
                   jint left, jint top, 
                   jint width, jint height)
@@ -309,7 +401,10 @@ ocr_word_confidences(JNIEnv *env, jobject thiz)
     // delimited words in GetUTF8Text.
     native_data_t *nat = get_native_data(env, thiz);
     int* confs = nat->api.AllWordConfidences();
-    LOG_ASSERT(confs != NULL, "Could not get word-confidence values!");
+    if (confs == NULL) {
+        LOGE("Could not get word-confidence values!");
+        return NULL;
+    }
 
     int len, *trav;
     for (len = 0, trav = confs; *trav != -1; trav++, len++);
@@ -367,15 +462,6 @@ ocr_clear_results(JNIEnv *env, jobject thiz)
     // adaptive data.
     LOGI("clearing adaptive classifier");
     nat->api.ClearAdaptiveClassifier();
-
-    if (nat->image_buffer != NULL) {
-        LOGI("releasing image buffer");
-        env->ReleaseByteArrayElements(nat->image_obj,
-                                      nat->image_buffer, JNI_ABORT);
-        env->DeleteGlobalRef(nat->image_obj);
-        nat->image_obj = NULL;
-        nat->image_buffer = NULL;
-    }
 }
 
 static void
@@ -398,13 +484,90 @@ ocr_set_page_seg_mode(JNIEnv *env, jobject thiz, jint mode)
     nat->api.SetPageSegMode((tesseract::PageSegMode)mode);
 }
 
+static jobjectArray
+ocr_get_languages(JNIEnv *env, jclass clazz)
+{
+    LOGV(__FUNCTION__);
+
+    DIR *tessdata = opendir(TESSBASE "tessdata");
+    if (tessdata == NULL) {
+        LOGE("Could not open tessdata directory %s", TESSBASE "tessdata");
+        return NULL;
+    }
+
+    dirent *ent;
+    LOGI("readdir");
+    while ((ent = readdir(tessdata))) {
+        char *where, *stem;
+        int shard = -1;
+        if (ent->d_type == 0x08 &&
+                (where = strstr(ent->d_name, ".inttemp"))) {
+            *where = 0;
+            if (where != ent->d_name) {
+                where--; // skip the dot
+                while(where != ent->d_name) {
+                    if(!isdigit(*where))
+                        break;
+                    where--; // it's a digit, backtrack
+                }
+                // we backtracked one too much
+                char *end = ++where;
+                // if there was a number, it will be written in
+                // shard, otherwise shard will remain -1.
+                sscanf(end, "%d", &shard);
+                *end = 0;
+                add_language(ent->d_name, shard + 1);
+            }
+        }
+    }
+
+    closedir(tessdata);
+
+    {
+        jclass stringClass = env->FindClass("java/lang/String");
+        jobjectArray langsArray =
+            env->NewObjectArray(get_num_languages(), stringClass, NULL);
+        LOG_ASSERT(langsArray != NULL,
+                   "Could not create Java object array!");
+        int i = 0;
+        language_info_t *it = language_iter_init();
+        for (; it; i++, it = language_iter_next()) {
+            env->SetObjectArrayElement(langsArray, i,
+                                       env->NewStringUTF(it->lang));
+        }
+        return langsArray;
+    }
+}
+
+static jint
+ocr_get_shards(JNIEnv *env, jclass clazz, jstring lang)
+{
+    int ret = -1;
+    const char *c_lang = env->GetStringUTFChars(lang, NULL);
+    if (c_lang == NULL) {
+        LOGE("could not extract lang string!");
+        return ret;
+    }
+
+    language_info_t* lang_entry = find_language(c_lang);
+    if (lang_entry)
+        ret = lang_entry->shards;
+
+    LOGI("shards for lang %s: %d\n", c_lang, ret);
+
+    env->ReleaseStringUTFChars(lang, c_lang);
+
+    return ret;
+}
+
 static void class_init(JNIEnv* env, jclass clazz) {
     LOGV(__FUNCTION__);
     field_mNativeData = env->GetFieldID(clazz, "mNativeData", "I");
 #if DEBUG && 0
-    test_ocr("/sdcard/chi.yuv", 106, 106, 1,
-             "/sdcard/out.txt", "chi_sim0",
-             "/sdcard/tessdata/ratings", "/sdcard/");
+    test_ocr(TESSBASE "chi.yuv", 106, 106, 1,
+             TESSBASE "out.txt", "chi_sim0",
+             TESSBASE "tessdata/ratings",
+             TESSBASE);
 #endif
 }
 
@@ -424,6 +587,7 @@ static void cleanup_native_data(JNIEnv* env, jobject object) {
     native_data_t *nat = get_native_data(env, object);
     if (nat)
         delete nat;
+    free_languages();
 }
 
 static JNINativeMethod methods[] = {
@@ -431,9 +595,9 @@ static JNINativeMethod methods[] = {
     {"classInitNative", "()V", (void*)class_init},
     {"initializeNativeDataNative", "()V", (void *)initialize_native_data},
     {"cleanupNativeDataNative", "()V", (void *)cleanup_native_data},
-
     {"openNative", "(Ljava/lang/String;)Z", (void*)ocr_open},
     {"setImageNative", "([BIII)V", (void*)ocr_set_image},
+    {"releaseImageNative", "()V", (void*)ocr_release_image},
     {"setRectangleNative", "(IIII)V", (void*)ocr_set_rectangle},
     {"recognizeNative", "()Ljava/lang/String;", (void*)ocr_recognize},
     {"recognizeNative", "([BIII)Ljava/lang/String;", (void*)ocr_recognize_image},
@@ -443,6 +607,8 @@ static JNINativeMethod methods[] = {
     {"wordConfidencesNative", "()[I", (void*)ocr_word_confidences},
     {"setVariableNative", "(Ljava/lang/String;Ljava/lang/String;)V", (void*)ocr_set_variable},
     {"setPageSegModeNative", "(I)V", (void*)ocr_set_page_seg_mode},
+    {"getLanguagesNative", "()[Ljava/lang/String;", (void*)ocr_get_languages},
+    {"getShardsNative", "(Ljava/lang/String;)I", (void*)ocr_get_shards},
 };
 
 /*
