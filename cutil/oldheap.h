@@ -18,31 +18,39 @@
 #ifndef   HEAP_H
 #define   HEAP_H
 
-/*-----------------------------------------------------------------------------
+/**----------------------------------------------------------------------------
           Include Files and Type Defines
------------------------------------------------------------------------------*/
-#include "host.h"
+----------------------------------------------------------------------------**/
+#include "general.h"
 #include "cutil.h"
 
 #define HEAPFULL      3000
 
+#define OK          0
 #define EMPTY -1
-#define TESS_HEAP_OK   0
 
-struct HEAPENTRY {
+typedef struct
+{
   FLOAT32 Key;
   void *Data;
-};
+}
 
-struct HEAP {
+
+HEAPENTRY;
+
+typedef struct
+{
   inT32 Size;
   inT32 FirstFree;
   HEAPENTRY Entry[1];
-};
+}
 
-/*-----------------------------------------------------------------------------
+
+HEAP;
+
+/**----------------------------------------------------------------------------
             Macros
------------------------------------------------------------------------------*/
+----------------------------------------------------------------------------**/
 #define           FreeHeap(H) memfree(H)
 #define           MaxSizeOfHeap(H)  (H->Size)
 #define           SizeOfHeap(H)   (H->FirstFree - 1)
@@ -58,9 +66,9 @@ struct HEAP {
 #define           HeapKeyFor(H,E)   ((H)->Entry[(E)+1].Key)
 #define           HeapDataFor(H,E)  ((H)->Entry[(E)+1].Data)
 
-/*-----------------------------------------------------------------------------
+/**----------------------------------------------------------------------------
           Public Function Prototypes
------------------------------------------------------------------------------*/
+----------------------------------------------------------------------------**/
 HEAP *MakeHeap(int Size);
 
 int HeapPop(HEAP *Heap, FLOAT32 *Key, void *out_ptr);
@@ -75,6 +83,44 @@ int GetTopOfHeap(HEAP *Heap, HEAPENTRY *Entry);
 
 void FreeHeapData(HEAP *Heap, void_dest destructor);
 
-bool HeapPushCheckSize(HEAP *Heap, FLOAT32 Key, void *Data);
+/*
+#if defined(__STDC__) || defined(__cplusplus)
+# define        _ARGS(s) s
+#else
+# define        _ARGS(s) ()
+#endif*/
 
+/* heap.c
+HEAP *MakeHeap
+    _ARGS((int Size));
+
+int HeapPop
+    _ARGS((HEAP *Heap,
+  FLOAT32 *Key,
+  char **Data));
+
+int HeapPopWorst
+    _ARGS((HEAP *Heap,
+  FLOAT32 *Key,
+  char **Data));
+
+void HeapPush
+    _ARGS((HEAP *Heap,
+  FLOAT32 Key,
+  char *Data));
+
+void HeapStore
+    _ARGS((HEAP *Heap,
+  HEAPENTRY *Entry));
+
+int GetTopOfHeap
+    _ARGS((HEAP *Heap,
+  HEAPENTRY *Entry));
+
+void FreeHeapData
+    _ARGS((HEAP *Heap,
+  void (*Deallocator )()));
+
+#undef _ARGS
+*/
 #endif

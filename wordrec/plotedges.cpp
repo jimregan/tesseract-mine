@@ -30,11 +30,6 @@
 #include "render.h"
 #include "split.h"
 
-// Include automatically generated configuration file if running autoconf.
-#ifdef HAVE_CONFIG_H
-#include "config_auto.h"
-#endif
-
 #ifndef GRAPHICS_DISABLED
 
 /*----------------------------------------------------------------------
@@ -76,9 +71,9 @@ void display_edgepts(LIST outlines) {
  **********************************************************************/
 void draw_blob_edges(TBLOB *blob) {
   TESSLINE *ol;
-  LIST edge_list = NIL_LIST;
+  LIST edge_list = NIL;
 
-  if (wordrec_display_splits) {
+  if (display_splits) {
     for (ol = blob->outlines; ol != NULL; ol = ol->next)
       push_on (edge_list, ol->loop);
     display_edgepts(edge_list);

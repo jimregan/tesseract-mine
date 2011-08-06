@@ -35,14 +35,39 @@
               V a r i a b l e s
 ----------------------------------------------------------------------*/
 extern ScrollView *segm_window;
-extern INT_VAR_H(wordrec_display_segmentations, 0, "Display Segmentations");
+extern int display_segmentations;/* Display Segmentations */
 
 /*----------------------------------------------------------------------
               F u n c t i o n s
 ----------------------------------------------------------------------*/
 void display_segmentation(TBLOB *chunks, SEARCH_STATE segmentation);
 
+void init_plotseg();
+
 void render_segmentation(ScrollView *window,
                          TBLOB *chunks,
                          SEARCH_STATE segmentation);
+
+/*
+#if defined(__STDC__) || defined(__cplusplus)
+# define	_ARGS(s) s
+#else
+# define	_ARGS(s) ()
+#endif*/
+
+/* plotseg.c
+void display_segmentation
+  _ARGS((BLOB *chunks,
+  SEARCH_STATE segmentation));
+
+void init_plotseg
+  _ARGS((void));
+
+void render_segmentation
+  _ARGS((X_WINDOW *window,
+  BLOB *chunks,
+  SEARCH_STATE segmentation));
+
+#undef _ARGS
+*/
 #endif

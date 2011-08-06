@@ -15,9 +15,9 @@
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
  ******************************************************************************/
-/*-----------------------------------------------------------------------------
+/**----------------------------------------------------------------------------
           Include Files and Type Defines
------------------------------------------------------------------------------*/
+----------------------------------------------------------------------------**/
 #include "oldheap.h"
 #include "freelist.h"
 #include "danerror.h"
@@ -28,25 +28,28 @@
 #define LEFTSON(N)  ((N)<<1)
 #define RIGHTSON(N) ((N)<<1 + 1)
 
-/*-----------------------------------------------------------------------------
+/**----------------------------------------------------------------------------
               Public Code
------------------------------------------------------------------------------*/
+----------------------------------------------------------------------------**/
 /*---------------------------------------------------------------------------*/
-/**
- * This routine creates and initializes a new heap data
- * structure containing Size elements.  In actuality, Size + 1
- * elements are allocated.  The first element, element 0, is
- * unused, this makes the index arithmetic easier.
- *
- * Globals:
- * - None
- *
- * @param Size maximum number of entries in the heap
- * @return Pointer to the new heap.
- * @note Exceptions: None
- * @note History: 3/13/89, DSJ, Created.
- */
 HEAP *MakeHeap(int Size) {
+/*
+ **	Parameters:
+ **		Size	maximum number of entries in the heap
+ **	Globals:
+ **		None
+ **	Operation:
+ **		This routine creates and initializes a new heap data
+ **		structure containing Size elements.  In actuality, Size + 1
+ **		elements are allocated.  The first element, element 0, is
+ **		unused, this makes the index arithmetic easier.
+ **	Return:
+ **		Pointer to the new heap.
+ **	Exceptions:
+ **		None
+ **	History:
+ **		3/13/89, DSJ, Created.
+ */
   HEAP *NewHeap;
 
   NewHeap = (HEAP *) Emalloc (sizeof (HEAP) + Size * sizeof (HEAPENTRY));
@@ -58,22 +61,24 @@ HEAP *MakeHeap(int Size) {
 
 
 /*---------------------------------------------------------------------------*/
-/**
- * This routine removes the top item on the heap and places
- * its contents into Key and Data.
- *
- * Globals:
- * - None
- *
- * @param Heap ptr to heap whose top is to be removed and returned
- * @param Key place to put key of top heap item
- * @param Data place to put data of top heap item
- *
- * @return OK if top entry returned, EMPTY if heap is empty
- * @note Exceptions: None
- * @note History: 5/10/91, DSJ, Created (Modified from GetTopOfHeap).
- */
 int HeapPop(HEAP *Heap, FLOAT32 *Key, void *out_ptr) {
+/*
+ **	Parameters:
+ **		Heap	ptr to heap whose top is to be removed and returned
+ **		Key	place to put key of top heap item
+ **		Data	place to put data of top heap item
+ **	Globals:
+ **		None
+ **	Operation:
+ **		This routine removes the top item on the heap and places
+ **		its contents into Key and Data.
+ **	Return:
+ **		OK if top entry returned, EMPTY if heap is empty
+ **	Exceptions:
+ **		None
+ **	History:
+ **		5/10/91, DSJ, Created (Modified from GetTopOfHeap).
+ */
   inT32 Hole;
   FLOAT32 HoleKey;
   inT32 Son;
@@ -108,20 +113,22 @@ int HeapPop(HEAP *Heap, FLOAT32 *Key, void *out_ptr) {
   }
   Heap->Entry[Hole].Key = HoleKey;
   Heap->Entry[Hole].Data = Heap->Entry[Heap->FirstFree].Data;
-  return (TESS_HEAP_OK);
+  return (OK);
 }                                /* HeapPop */
 
 
-/**
+/**********************************************************************
  * HeapPopWorst
  *
  * Remove the largest item from the heap.
- *
- * @param Heap ptr to heap whose top is to be removed and returned
- * @param Key place to put key of top heap item
- * @param Data place to put data of top heap item
- */
+ **********************************************************************/
 int HeapPopWorst(HEAP *Heap, FLOAT32 *Key, void *out_ptr) {
+/*
+ **	Parameters:
+ **		Heap	ptr to heap whose top is to be removed and returned
+ **		Key	place to put key of top heap item
+ **		Data	place to put data of top heap item
+ */
   inT32 Index;                   /*current index */
   inT32 Hole;
   FLOAT32 HoleKey;
@@ -161,38 +168,31 @@ int HeapPopWorst(HEAP *Heap, FLOAT32 *Key, void *out_ptr) {
     Hole = Father;
     Father = FATHER (Hole);
   }
-  return (TESS_HEAP_OK);
+  return (OK);
 }                                /* HeapPop */
 
 
-// Pushes data onto the heap only if there is free space left.
-// Returns true if data was added to the heap, false if the heap was full.
-bool HeapPushCheckSize(HEAP *Heap, FLOAT32 Key, void *Data) {
-  if (Heap->FirstFree > Heap->Size) return false;
-  HeapPush(Heap, Key, Data);
-  return true;
-}
-
 /*---------------------------------------------------------------------------*/
-/** 
- * This routine stores Data into Heap and associates it
- * with Key.  The heap is
- * maintained in such a way that the item with the lowest key
- * is always at the top of the heap.
- *
- * Globals:
- * - None
- *
- * @param Heap ptr to heap to store new item in
- * @param Key numeric key associated with new item
- * @param Data ptr to data contents of new item
- *
- * @note Exceptions:
- * - HEAPFULL error if heap size is exceeded
- *
- * @note History: 5/10/91, DSJ, Created (Modified version of HeapStore).
- */
 void HeapPush(HEAP *Heap, FLOAT32 Key, void *Data) {
+/*
+ **	Parameters:
+ **		Heap		ptr to heap to store new item in
+ **		Key		numeric key associated with new item
+ **		Data		ptr to data contents of new item
+ **	Globals:
+ **		None
+ **	Operation:
+ **		This routine stores Data into Heap and associates it
+ **		with Key.  The heap is
+ **		maintained in such a way that the item with the lowest key
+ **		is always at the top of the heap.
+ **	Return:
+ **		None
+ **	Exceptions:
+ **		HEAPFULL	error if heap size is exceeded
+ **	History:
+ **		5/10/91, DSJ, Created (Modified version of HeapStore).
+ */
   inT32 Item;
   inT32 Father;
 
@@ -217,21 +217,24 @@ void HeapPush(HEAP *Heap, FLOAT32 Key, void *Data) {
 
 
 /*---------------------------------------------------------------------------*/
-/**
- * This routine stores Entry into Heap.  The heap is
- * maintained in such a way that the item with the lowest key
- * is always at the top of the heap.
- *
- * Globals:
- * - None
- *
- * @param Heap ptr to heap to store new item in
- * @param Entry ptr to item to be stored in Heap
- * @note Exceptions:
- * - HEAPFULL error if heap size is exceeded
- * @note History: 3/13/89, DSJ, Created.
- */
 void HeapStore(HEAP *Heap, HEAPENTRY *Entry) {
+/*
+ **	Parameters:
+ **		Heap		ptr to heap to store new item in
+ **		Entry		ptr to item to be stored in Heap
+ **	Globals:
+ **		None
+ **	Operation:
+ **		This routine stores Entry into Heap.  The heap is
+ **		maintained in such a way that the item with the lowest key
+ **		is always at the top of the heap.
+ **	Return:
+ **		None
+ **	Exceptions:
+ **		HEAPFULL	error if heap size is exceeded
+ **	History:
+ **		3/13/89, DSJ, Created.
+ */
   inT32 Item;
   inT32 Father;
 
@@ -256,21 +259,23 @@ void HeapStore(HEAP *Heap, HEAPENTRY *Entry) {
 
 
 /*---------------------------------------------------------------------------*/
-/**
- * This routine removes the top item on the heap and copies its
- * contents into Entry.
- *
- * @param Heap ptr to heap whose top is to be removed and returned
- * @param Entry ptr to heap entry to be filled with top entry on Heap
- *
- * Globals:
- * - None
- *
- * @return OK if top entry returned, EMPTY if heap is empty
- * @note Exceptions: None
- * @note History: 3/13/89, DSJ, Created.
- */
 int GetTopOfHeap(HEAP *Heap, HEAPENTRY *Entry) {
+/*
+ **	Parameters:
+ **		Heap	ptr to heap whose top is to be removed and returned
+ **		Entry	ptr to heap entry to be filled with top entry on Heap
+ **	Globals:
+ **		None
+ **	Operation:
+ **		This routine removes the top item on the heap and copies its
+ **		contents into Entry.
+ **	Return:
+ **		OK if top entry returned, EMPTY if heap is empty
+ **	Exceptions:
+ **		None
+ **	History:
+ **		3/13/89, DSJ, Created.
+ */
   inT32 Hole;
   FLOAT32 HoleKey;
   inT32 Son;
@@ -304,27 +309,25 @@ int GetTopOfHeap(HEAP *Heap, HEAPENTRY *Entry) {
   }
   Heap->Entry[Hole].Key = HoleKey;
   Heap->Entry[Hole].Data = Heap->Entry[Heap->FirstFree].Data;
-  return (TESS_HEAP_OK);
+  return (OK);
 }                                /* GetTopOfHeap */
 
 
 /*---------------------------------------------------------------------------*/
-/**
- * This routine is similar to FreeHeap in that it
- * deallocates the memory consumed by the heap.  However, it
- * also calls Deallocator for each item in the heap so that
- * this data is also deallocated.
- *
- * @param Heap heap whose data is to be freed
- * @param Deallocator function to be used to deallocate data
- *
- * Globals: 
- * - None
- *
- * @note Exceptions: none
- * @note History: Tue May 15 08:52:04 1990, DSJ, Created.
- */
 void FreeHeapData(HEAP *Heap, void_dest destructor) {
+/*
+ **	Parameters:
+ **		Heap		heap whose data is to be freed
+ **		Deallocator	function to be used to deallocate data
+ **	Globals: none
+ **	Operation: This routine is similar to FreeHeap in that it
+ **		deallocates the memory consumed by the heap.  However, it
+ **		also calls Deallocator for each item in the heap so that
+ **		this data is also deallocated.
+ **	Return: none
+ **	Exceptions: none
+ **	History: Tue May 15 08:52:04 1990, DSJ, Created.
+ */
   HEAPENTRY Entry;
 
   while (GetTopOfHeap (Heap, &Entry) != EMPTY)

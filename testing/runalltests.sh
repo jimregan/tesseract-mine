@@ -20,12 +20,12 @@ then
    echo "Usage:$0 unlv-data-dir version-id"
    exit 1
 fi
-if [ ! -d api ]
+if [ ! -d ccmain ]
 then
   echo "Run $0 from the tesseract-ocr root directory!"
   exit 1
 fi
-if [ ! -r api/tesseract -a ! -r tesseract.exe ]
+if [ ! -r ccmain/tesseract -a ! -r tesseract.exe ]
 then
   echo "Please build tesseract before running $0"
   exit 1
@@ -41,19 +41,6 @@ deltapc() {
 awk ' BEGIN {
 printf("%.2f", 100.0*('$1'-'$2')/'$2');
 }'
-}
-
-#timesum computes the total cpu time
-timesum() {
-awk ' BEGIN {
-total = 0.0;
-}
-{
-  total += $2;
-}
-END {
-  printf("%.2f\n", total);
-}' $1
 }
 
 imdir="$1"
@@ -102,19 +89,8 @@ do
 	wdelta=`deltapc $wderrs $oldwerrs`
 	nswdelta=`deltapc $nswderrs $oldnswerrs`
 	sumfile=$rdir/$vid.$set.sum
-        if [ -r testing/reports/$set.times ]
-        then
-          total_time=`timesum testing/reports/$set.times`
-          if [ -r testing/reports/prev/$set.times ]
-          then
-            paste testing/reports/prev/$set.times testing/reports/$set.times |
-              awk '{ printf("%s %.2f\n", $1, $4-$2); }' |sort -k2n >testing/reports/$set.timedelta
-          fi
-	else
-          total_time='0.0'
-        fi
-        echo "$vid	$set	$cherrs	$chacc	$chdelta%	$wderrs	$wdacc\
-	$wdelta%	$nswderrs	$nswdacc	$nswdelta%	${total_time}s" >$sumfile
+	echo "$vid	$set	$cherrs	$chacc	$chdelta%	$wderrs	$wdacc\
+	$wdelta%	$nswderrs	$nswdacc	$nswdelta%" >$sumfile
 	# Sum totals over all the testsets.
 	let totalerrs=totalerrs+cherrs
 	let totalwerrs=totalwerrs+wderrs

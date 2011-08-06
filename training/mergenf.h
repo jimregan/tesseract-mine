@@ -21,8 +21,7 @@
 #include "protos.h"
 #include "cluster.h"
 #include "ocrfeatures.h"
-#include "callcpp.h"
-#include "picofeat.h"
+#include "training.h"
 
 
 #define WORST_MATCH_ALLOWED	(0.9)
@@ -37,6 +36,8 @@
 #define YPOSITION			1
 #define MFLENGTH			2
 #define ORIENTATION			3
+
+typedef enum {PicoFeatY, PicoFeatDir, PicoFeatX} PICO_FEAT_PARAM_NAME;
 
 typedef struct
 {
@@ -74,12 +75,16 @@ void MakeNewFromOld (
      PROTO	New,
      PROTOTYPE	*Old);
 
+void InitSubfeatureVars ();
+
 FLOAT32 SubfeatureEvidence (
    FEATURE     Feature,
    PROTO       Proto);
 
-double EvidenceOf (
-  register double   Similarity);
+FLOAT32 EvidenceOf (
+  register FLOAT32   Similarity);
+
+void InitFastTrainerVars ();
 
 BOOL8 DummyFastMatch (
      FEATURE	Feature,
@@ -95,3 +100,7 @@ BOOL8 PointInside (
      FRECT	*Rectangle,
      FLOAT32	X,
 	 FLOAT32	Y);
+
+extern FEATURE_DESC_STRUCT	PicoFeatDesc;
+
+

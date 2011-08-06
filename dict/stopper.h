@@ -21,44 +21,83 @@
 /**----------------------------------------------------------------------------
           Include Files and Type Defines
 ----------------------------------------------------------------------------**/
-
-#include "genericvector.h"
-#include "params.h"
+#include "choicearr.h"
 #include "states.h"
-#include "unichar.h"
 
 typedef uinT8 BLOB_WIDTH;
 
-struct DANGERR_INFO {
-  DANGERR_INFO() :
-    begin(-1), end(-1), dangerous(false), correct_is_ngram(false) {}
-  DANGERR_INFO(int b, int e, bool d, bool n) :
-    begin(b), end(e), dangerous(d), correct_is_ngram(n) {}
-  int begin;
-  int end;
-  bool dangerous;
-  bool correct_is_ngram;
-};
+typedef struct
+{
+  inT16 index;
+  unsigned bad_length:8;
+  unsigned good_length:8;
+} DANGERR;
 
-typedef GenericVector<DANGERR_INFO> DANGERR;
+/*---------------------------------------------------------------------------
+          Variables
+---------------------------------------------------------------------------*/
+extern float CertaintyPerChar;
+extern float NonDictCertainty;
+extern float RejectCertaintyOffset;
+extern int StopperDebugLevel;
 
-enum ACCEPTABLE_CHOICE_CALLER { CHOPPER_CALLER, ASSOCIATOR_CALLER };
+/**----------------------------------------------------------------------------
+            Macros
+----------------------------------------------------------------------------**/
+#define DisableChoiceAccum()  (KeepWordChoices = FALSE)
+#define EnableChoiceAccum() (KeepWordChoices = TRUE)
 
-struct CHAR_CHOICE {
-  UNICHAR_ID Class;
-  uinT16 NumChunks;
-  float Certainty;
-};
+/**----------------------------------------------------------------------------
+          Public Function Prototypes
+----------------------------------------------------------------------------**/
+int AcceptableChoice(CHOICES_LIST Choices,
+                     A_CHOICE *BestChoice,
+                     A_CHOICE *RawChoice,
+                     DANGERR *fixpt);
 
-struct VIABLE_CHOICE_STRUCT {
-  float Rating;
-  float Certainty;
-  FLOAT32 AdjustFactor;
-  int Length;
-  bool ComposedFromCharFragments;
-  CHAR_CHOICE Blob[1];
-};
+int AcceptableResult(A_CHOICE *BestChoice, A_CHOICE *RawChoice);
 
-typedef VIABLE_CHOICE_STRUCT *VIABLE_CHOICE;
+int AlternativeChoicesWorseThan(FLOAT32 Threshold);
 
+int CurrentBestChoiceIs(const char *Word, const char *Word_lengths);
+
+FLOAT32 CurrentBestChoiceAdjustFactor();
+
+int CurrentWordAmbig();
+
+void DebugWordChoices();
+
+void FilterWordChoices();
+
+void FindClassifierErrors (FLOAT32 MinRating,
+FLOAT32 MaxRating,
+FLOAT32 RatingMargin, FLOAT32 Thresholds[]);
+
+void InitStopperVars();
+
+void InitChoiceAccum();
+
+void LogNewRawChoice (A_CHOICE * Choice,
+FLOAT32 AdjustFactor, float Certainties[]);
+
+void LogNewSegmentation(PIECES_STATE BlobWidth);
+
+void LogNewSplit(int Blob);
+
+void LogNewWordChoice (A_CHOICE * Choice,
+FLOAT32 AdjustFactor, float Certainties[]);
+
+int NoDangerousAmbig(const char *Word,
+                     const char *Word_lengths,
+                     DANGERR *fixpt);
+void EndDangerousAmbigs();
+
+void SettupStopperPass1();
+
+void SettupStopperPass2();
+
+/**----------------------------------------------------------------------------
+        Global Data Definitions and Declarations
+----------------------------------------------------------------------------**/
+extern BOOL8 KeepWordChoices;
 #endif

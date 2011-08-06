@@ -24,19 +24,13 @@
 // menu structure there.
 // A SVMenuNode can both be used in the context_ of popup menus as well as
 // menu bars.
+#include "svmnode.h"
+
+#ifndef GRAPHICS_DISABLED
 
 #include <string.h>
 #include <iostream>
 #include <cstring>
-
-#include "svmnode.h"
-
-// Include automatically generated configuration file if running autoconf.
-#ifdef HAVE_CONFIG_H
-#include "config_auto.h"
-#endif
-
-#ifndef GRAPHICS_DISABLED
 
 #include "scrollview.h"
 

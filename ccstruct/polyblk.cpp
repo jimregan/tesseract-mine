@@ -17,54 +17,36 @@
  *
  **********************************************************************/
 
-#include "mfcpch.h"
-#include <ctype.h>
-#include <math.h>
-#include <stdio.h>
-#include "elst.h"
-#include "polyblk.h"
+#include    "mfcpch.h"
+#include    <stdio.h>
+#include          <ctype.h>
+#include          <math.h>
+#include          "elst.h"
+#include    "polyblk.h"
 
-// Include automatically generated configuration file if running autoconf.
-#ifdef HAVE_CONFIG_H
-#include "config_auto.h"
-#endif
-
-#include "hpddef.h"     // must be last (handpd.dll)
+#include          "hpddef.h"     //must be last (handpd.dll)
 
 #define PBLOCK_LABEL_SIZE 150
 #define INTERSECTING MAX_INT16
 
 int lessthan(const void *first, const void *second);
 
-POLY_BLOCK::POLY_BLOCK(ICOORDELT_LIST *points, PolyBlockType t) {
+POLY_BLOCK::POLY_BLOCK(ICOORDELT_LIST *points, POLY_TYPE t) {
   ICOORDELT_IT v = &vertices;
 
-  vertices.clear();
-  v.move_to_first();
-  v.add_list_before(points);
+  vertices.clear ();
+  v.move_to_first ();
+  v.add_list_before (points);
   compute_bb();
   type = t;
 }
 
-// Initialize from box coordinates.
-POLY_BLOCK::POLY_BLOCK(const TBOX& box, PolyBlockType t) {
-  vertices.clear();
-  ICOORDELT_IT v = &vertices;
-  v.move_to_first();
-  v.add_to_end(new ICOORDELT(box.left(), box.top()));
-  v.add_to_end(new ICOORDELT(box.left(), box.top() + box.height()));
-  v.add_to_end(new ICOORDELT(box.left() + box.width(),
-                             box.top() + box.height()));
-  v.add_to_end(new ICOORDELT(box.left(), box.top() + box.height()));
-  compute_bb();
-  type = t;
-}
 
-/**
- * @name POLY_BLOCK::compute_bb
+/**********************************************************************
+ * POLY_BLOCK::compute_bb
  *
  * Compute the bounding box from the outline points.
- */
+ **********************************************************************/
 
 void POLY_BLOCK::compute_bb() {  //constructor
   ICOORD ibl, itr;               //integer bb
@@ -95,14 +77,15 @@ void POLY_BLOCK::compute_bb() {  //constructor
 }
 
 
-/**
- * @name POLY_BLOCK::winding_number
+/**********************************************************************
+ * POLY_BLOCK::winding_number
  *
  * Return the winding number of the outline around the given point.
- * @param point point to wind around
- */
+ **********************************************************************/
 
-inT16 POLY_BLOCK::winding_number(const ICOORD &point) {
+inT16 POLY_BLOCK::winding_number(                     //winding number
+                                 const ICOORD &point  //point to wind around
+                                ) {
   inT16 count;                   //winding count
   ICOORD pt;                     //current point
   ICOORD vec;                    //point to current point
@@ -139,24 +122,30 @@ inT16 POLY_BLOCK::winding_number(const ICOORD &point) {
 }
 
 
-/// @Returns true if other is inside this.
-bool POLY_BLOCK::contains(POLY_BLOCK *other) {
-  inT16 count;                   // winding count
-  ICOORDELT_IT it = &vertices;   // iterator
+/**********************************************************************
+ * POLY_BLOCK::contains
+ *
+ * Is poly within poly
+ **********************************************************************/
+
+BOOL8 POLY_BLOCK::contains(  //other outline
+                           POLY_BLOCK *other) {
+  inT16 count;                   //winding count
+  ICOORDELT_IT it = &vertices;   //iterator
   ICOORD vertex;
 
   if (!box.overlap (*(other->bounding_box ())))
-    return false;                // can't be contained
+    return FALSE;                //can't be contained
 
   /* check that no vertex of this is inside other */
 
   do {
     vertex = *it.data ();
-                                 // get winding number
+                                 //get winding number
     count = other->winding_number (vertex);
     if (count != INTERSECTING)
       if (count != 0)
-        return false;
+        return (FALSE);
     it.forward ();
   }
   while (!it.at_first ());
@@ -171,22 +160,23 @@ bool POLY_BLOCK::contains(POLY_BLOCK *other) {
     count = winding_number (vertex);
     if (count != INTERSECTING)
       if (count == 0)
-        return false;
+        return (FALSE);
     it.forward ();
   }
   while (!it.at_first ());
-  return true;
+  return TRUE;
 }
 
 
-/**
- * @name POLY_BLOCK::rotate
+/**********************************************************************
+ * POLY_BLOCK::rotate
  *
  * Rotate the POLY_BLOCK.
- * @param rotation cos, sin of angle
- */
+ **********************************************************************/
 
-void POLY_BLOCK::rotate(FCOORD rotation) {
+void POLY_BLOCK::rotate(                 //constructor
+                        FCOORD rotation  //cos,sin of angle
+                       ) {
   FCOORD pos;                    //current pos;
   ICOORDELT *pt;                 //current point
   ICOORDELT_IT pts = &vertices;  //iterator
@@ -205,14 +195,15 @@ void POLY_BLOCK::rotate(FCOORD rotation) {
 }
 
 
-/**
+/**********************************************************************
  * POLY_BLOCK::move
  *
  * Move the POLY_BLOCK.
- * @param shift x,y translation vector
- */
+ **********************************************************************/
 
-void POLY_BLOCK::move(ICOORD shift) {
+void POLY_BLOCK::move(              //constructor
+                      ICOORD shift  //cos,sin of angle
+                     ) {
   ICOORDELT *pt;                 //current point
   ICOORDELT_IT pts = &vertices;  //iterator
 
@@ -227,14 +218,15 @@ void POLY_BLOCK::move(ICOORD shift) {
 
 
 #ifndef GRAPHICS_DISABLED
-void POLY_BLOCK::plot(ScrollView* window, inT32 num) {
+void POLY_BLOCK::plot(ScrollView* window, ScrollView::Color colour, inT32 num) {
   ICOORDELT_IT v = &vertices;
 
-  window->Pen(ColorForPolyBlockType(type));
+  window->Pen(colour);
 
   v.move_to_first ();
 
   if (num > 0) {
+    window->Pen(colour);
     window->TextAttributes("Times", 80, false, false, false);
     char temp_buff[34];
     #ifdef __UNIX__
@@ -283,43 +275,43 @@ void POLY_BLOCK::fill(ScrollView* window, ScrollView::Color colour) {
 #endif
 
 
-/// @Returns true if the polygons of other and this overlap.
-bool POLY_BLOCK::overlap(POLY_BLOCK *other) {
-  inT16 count;                   // winding count
-  ICOORDELT_IT it = &vertices;   // iterator
+BOOL8 POLY_BLOCK::overlap(  // do polys overlap
+                          POLY_BLOCK *other) {
+  inT16 count;                   //winding count
+  ICOORDELT_IT it = &vertices;   //iterator
   ICOORD vertex;
 
-  if (!box.overlap(*(other->bounding_box())))
-    return false;                // can't be any overlap.
+  if (!box.overlap (*(other->bounding_box ())))
+    return FALSE;                //can't be any overlap
 
   /* see if a vertex of this is inside other */
 
   do {
     vertex = *it.data ();
-                                 // get winding number
+                                 //get winding number
     count = other->winding_number (vertex);
     if (count != INTERSECTING)
       if (count != 0)
-        return true;
+        return (TRUE);
     it.forward ();
   }
   while (!it.at_first ());
 
   /* see if a vertex of other is inside this */
 
-                                 // switch lists
+                                 //switch lists
   it.set_to_list (other->points ());
   do {
-    vertex = *it.data();
-                                 // try other way round
+    vertex = *it.data ();
+                                 //try other way round
     count = winding_number (vertex);
     if (count != INTERSECTING)
       if (count != 0)
-        return true;
+        return (TRUE);
     it.forward ();
   }
   while (!it.at_first ());
-  return false;
+  return FALSE;
 }
 
 
@@ -376,26 +368,31 @@ int lessthan(const void *first, const void *second) {
 }
 
 
-/// Returns a color to draw the given type.
-ScrollView::Color POLY_BLOCK::ColorForPolyBlockType(PolyBlockType type) {
-  // Keep kPBColors in sync with PolyBlockType.
-  const ScrollView::Color kPBColors[PT_COUNT] = {
-    ScrollView::WHITE,        // Type is not yet known. Keep as the 1st element.
-    ScrollView::BLUE,         // Text that lives inside a column.
-    ScrollView::CYAN,         // Text that spans more than one column.
-    ScrollView::MEDIUM_BLUE,  // Text that is in a cross-column pull-out region.
-    ScrollView::MAGENTA,      // Partition belonging to a table region.
-    ScrollView::GREEN,        // Text-line runs vertically.
-    ScrollView::LIGHT_BLUE,   // Text that belongs to an image.
-    ScrollView::RED,          // Image that lives inside a column.
-    ScrollView::YELLOW,       // Image that spans more than one column.
-    ScrollView::ORANGE,       // Image in a cross-column pull-out region.
-    ScrollView::BROWN,        // Horizontal Line.
-    ScrollView::DARK_GREEN,   // Vertical Line.
-    ScrollView::GREY          // Lies outside of any column.
-  };
-  if (type >= 0 && type < PT_COUNT) {
-    return kPBColors[type];
-  }
-  return ScrollView::WHITE;
+/**********************************************************************
+ * POLY_BLOCK::serialise_asc
+ *
+ * Converto to ascii file.
+ **********************************************************************/
+
+void POLY_BLOCK::serialise_asc(         //convert to ascii
+                               FILE *f  //file to use
+                              ) {
+  vertices.serialise_asc (f);
+  box.serialise_asc (f);
+  serialise_INT32(f, type);
+}
+
+
+/**********************************************************************
+ * POLY_BLOCK::de_serialise_asc
+ *
+ * Converto from ascii file.
+ **********************************************************************/
+
+void POLY_BLOCK::de_serialise_asc(         //convert from ascii
+                                  FILE *f  //file to use
+                                 ) {
+  vertices.de_serialise_asc (f);
+  box.de_serialise_asc (f);
+  type = (POLY_TYPE) de_serialise_INT32 (f);
 }

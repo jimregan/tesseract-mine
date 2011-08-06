@@ -22,23 +22,53 @@
 #include "picofeat.h"
 #include "normfeat.h"
 
-/*-----------------------------------------------------------------------------
+/**----------------------------------------------------------------------------
         Global Data Definitions and Declarations
------------------------------------------------------------------------------*/
-// Definitions of extractors separated from feature definitions.
-const FEATURE_EXT_STRUCT MicroFeatureExt = { ExtractMicros };
-const FEATURE_EXT_STRUCT PicoFeatExt = { NULL };
-const FEATURE_EXT_STRUCT OutlineFeatExt = { NULL };
-const FEATURE_EXT_STRUCT CharNormExt = { ExtractCharNormFeatures };
+----------------------------------------------------------------------------**/
+/* flag to control learn mode vs. classify mode */
+int ExtractMode;
 
-const FEATURE_EXT_STRUCT* ExtractorDefs[NUM_FEATURE_TYPES] = {
+// Definitions of extractors separated from feature definitions.
+DefineFeatureExt (MicroFeatureExt, ExtractMicros, InitMicroFXVars)
+DefineFeatureExt (PicoFeatExt, NULL, DefaultInitFXVars)
+DefineFeatureExt (CharNormExt, ExtractCharNormFeatures, DefaultInitFXVars)
+DefineFeatureExt (OutlineFeatExt, NULL, DefaultInitFXVars)
+
+FEATURE_EXT_STRUCT* ExtractorDefs[NUM_FEATURE_TYPES] = {
   &MicroFeatureExt,
   &PicoFeatExt,
   &OutlineFeatExt,
   &CharNormExt
 };
 
-void SetupExtractors(FEATURE_DEFS_STRUCT *FeatureDefs) {
+
+/**----------------------------------------------------------------------------
+              Public Code
+----------------------------------------------------------------------------**/
+/*---------------------------------------------------------------------------*/
+void SetupExtractors() {
   for (int i = 0; i < NUM_FEATURE_TYPES; ++i)
-    FeatureDefs->FeatureExtractors[i] = ExtractorDefs[i];
+	  FeatureDefs.FeatureExtractors[i] = ExtractorDefs[i];
 }
+
+void GetLineStatsFromRow(TEXTROW *Row, LINE_STATS *LineStats) {
+/*
+ **	Parameters:
+ **		Row		text row to get line statistics from
+ **		LineStats	place to put line statistics
+ **	Globals: none
+ **	Operation: This routine copies the relavent fields from the
+ **		Row struct to the LineStats struct.
+ **	Return: none (results are returned in LineStats)
+ **	Exceptions: none
+ **	History: Mon Mar 11 10:38:43 1991, DSJ, Created.
+ */
+  LineStats->Baseline = &(Row->baseline);
+  LineStats->XHeightLine = &(Row->xheight);
+  LineStats->xheight = Row->lineheight;
+  LineStats->AscRise = Row->ascrise;
+  LineStats->DescDrop = Row->descdrop;
+  LineStats->TextRow = Row;      /* kludge - only needed by fx for */
+  /* fast matcher - remove later */
+
+}                                /* GetLineStatsFromRow */

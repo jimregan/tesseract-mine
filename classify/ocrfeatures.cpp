@@ -25,9 +25,6 @@
 #include "freelist.h"
 #include "scanutils.h"
 
-#include <assert.h>
-#include <math.h>
-
 /**----------------------------------------------------------------------------
               Public Code
 ----------------------------------------------------------------------------**/
@@ -48,12 +45,30 @@ BOOL8 AddFeature(FEATURE_SET FeatureSet, FEATURE Feature) {
  */
   if (FeatureSet->NumFeatures >= FeatureSet->MaxNumFeatures) {
     FreeFeature(Feature);
-    return FALSE;
+    return (FALSE);
   }
 
-  FeatureSet->Features[FeatureSet->NumFeatures++] = Feature;
-  return TRUE;
+  FeatureSet->Features[FeatureSet->NumFeatures] = Feature;
+  FeatureSet->NumFeatures++;
+  return (TRUE);
+
 }                                /* AddFeature */
+
+
+/*---------------------------------------------------------------------------*/
+void DefaultInitFXVars() {
+/*
+ **	Parameters: none
+ **	Globals: none
+ **	Operation: This routine can be used by any feature extractor which
+ **		does not use adjustable controls.
+ **		It does nothing.
+ **	Return: none
+ **	Exceptions: none
+ **	History: Wed May 23 16:37:45 1990, DSJ, Created.
+ */
+}                                /* DefaultInitFXVars */
+
 
 /*---------------------------------------------------------------------------*/
 void FreeFeature(FEATURE Feature) {
@@ -67,7 +82,7 @@ void FreeFeature(FEATURE Feature) {
  **	History: Mon May 21 13:33:27 1990, DSJ, Created.
  */
   if (Feature) {
-    free_struct (Feature, sizeof (FEATURE_STRUCT)
+    c_free_struct (Feature, sizeof (FEATURE_STRUCT)
       + sizeof (FLOAT32) * (Feature->Type->NumParams - 1),
       "sizeof(FEATURE_STRUCT)+sizeof(FLOAT32)*(NumParamsIn(Feature)-1)");
   }
@@ -92,14 +107,14 @@ void FreeFeatureSet(FEATURE_SET FeatureSet) {
 
   if (FeatureSet) {
     for (i = 0; i < FeatureSet->NumFeatures; i++)
-      FreeFeature(FeatureSet->Features[i]);
+      FreeFeature (FeatureSet->Features[i]);
     memfree(FeatureSet);
   }
 }                                /* FreeFeatureSet */
 
 
 /*---------------------------------------------------------------------------*/
-FEATURE NewFeature(const FEATURE_DESC_STRUCT* FeatureDesc) {
+FEATURE NewFeature(FEATURE_DESC FeatureDesc) {
 /*
  **	Parameters:
  **		FeatureDesc	description of feature to be created.
@@ -146,7 +161,7 @@ FEATURE_SET NewFeatureSet(int NumFeatures) {
 
 
 /*---------------------------------------------------------------------------*/
-FEATURE ReadFeature(FILE *File, const FEATURE_DESC_STRUCT* FeatureDesc) {
+FEATURE ReadFeature(FILE *File, FEATURE_DESC FeatureDesc) {
 /*
  **	Parameters:
  **		File		open text file to read feature from
@@ -169,9 +184,6 @@ FEATURE ReadFeature(FILE *File, const FEATURE_DESC_STRUCT* FeatureDesc) {
   for (i = 0; i < Feature->Type->NumParams; i++) {
     if (fscanf (File, "%f", &(Feature->Params[i])) != 1)
       DoError (ILLEGAL_FEATURE_PARAM, "Illegal feature parameter spec");
-#ifndef WIN32
-    assert (!isnan(Feature->Params[i]));
-#endif
   }
   return (Feature);
 
@@ -179,7 +191,7 @@ FEATURE ReadFeature(FILE *File, const FEATURE_DESC_STRUCT* FeatureDesc) {
 
 
 /*---------------------------------------------------------------------------*/
-FEATURE_SET ReadFeatureSet(FILE *File, const FEATURE_DESC_STRUCT* FeatureDesc) {
+FEATURE_SET ReadFeatureSet(FILE *File, FEATURE_DESC FeatureDesc) {
 /*
  **	Parameters:
  **		File		open text file to read new feature set from
@@ -229,12 +241,8 @@ void WriteFeature(FILE *File, FEATURE Feature) {
  */
   int i;
 
-  for (i = 0; i < Feature->Type->NumParams; i++) {
-#ifndef WIN32
-    assert (!isnan(Feature->Params[i]));
-#endif
+  for (i = 0; i < Feature->Type->NumParams; i++)
     fprintf (File, " %12g", Feature->Params[i]);
-  }
   fprintf (File, "\n");
 
 }                                /* WriteFeature */
@@ -266,7 +274,7 @@ void WriteFeatureSet(FILE *File, FEATURE_SET FeatureSet) {
 
 
 /*---------------------------------------------------------------------------*/
-void WriteOldParamDesc(FILE *File, const FEATURE_DESC_STRUCT* FeatureDesc) {
+void WriteOldParamDesc(FILE *File, FEATURE_DESC FeatureDesc) {
 /*
  **	Parameters:
  **		File		open text file to write FeatureDesc to

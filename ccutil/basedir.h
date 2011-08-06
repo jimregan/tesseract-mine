@@ -27,7 +27,6 @@
 
 DLLSYM inT8 getpath(                   //get dir name of code
                     const char *code,  //executable to locate
-                    const STRING &dll_module_name,
                     STRING &path       //output path name
                    );
 #endif

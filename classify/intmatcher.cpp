@@ -16,27 +16,27 @@
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
  ******************************************************************************/
-/*----------------------------------------------------------------------------
+/**----------------------------------------------------------------------------
                           Include Files and Type Defines
-----------------------------------------------------------------------------*/
+----------------------------------------------------------------------------**/
 #include "intmatcher.h"
-#include "intproto.h"
+#include "tordvars.h"
 #include "callcpp.h"
 #include "scrollview.h"
 #include "globals.h"
-#include "classify.h"
 #include <math.h>
 
-// Include automatically generated configuration file if running autoconf.
-#ifdef HAVE_CONFIG_H
-#include "config_auto.h"
-#endif
+#define CLASS_MASK_SIZE ((MAX_NUM_CLASSES*NUM_BITS_PER_CLASS \
+		+BITS_PER_WERD-1)/BITS_PER_WERD)
 
-/*----------------------------------------------------------------------------
+/**----------------------------------------------------------------------------
                     Global Data Definitions and Declarations
-----------------------------------------------------------------------------*/
-
-static const uinT8 offset_table[256] = {
+----------------------------------------------------------------------------**/
+#define  SE_TABLE_BITS    9
+#define  SE_TABLE_SIZE  512
+#define TEMPLATE_CACHE 2
+static uinT8 SimilarityEvidenceTable[SE_TABLE_SIZE];
+static uinT8 offset_table[256] = {
   255, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
   4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
   5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
@@ -54,8 +54,7 @@ static const uinT8 offset_table[256] = {
   5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
   4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0
 };
-
-static const uinT8 next_table[256] = {
+static uinT8 next_table[256] = {
   0, 0, 0, 0x2, 0, 0x4, 0x4, 0x6, 0, 0x8, 0x8, 0x0a, 0x08, 0x0c, 0x0c, 0x0e,
   0, 0x10, 0x10, 0x12, 0x10, 0x14, 0x14, 0x16, 0x10, 0x18, 0x18, 0x1a, 0x18,
   0x1c, 0x1c, 0x1e,
@@ -89,53 +88,79 @@ static const uinT8 next_table[256] = {
   0xf8, 0xfc, 0xfc, 0xfe
 };
 
-struct ClassPrunerData {
-  int *class_count_;
-  int *norm_count_;
-  int *sort_key_;
-  int *sort_index_;
-  int max_classes_;
+static uinT32 EvidenceTableMask;
 
-  ClassPrunerData(int max_classes) {
-    // class_count_ and friends are referenced by indexing off of data in
-    //   class pruner word sized chunks.  Each pruner word is of sized
-    //   BITS_PER_WERD and each entry is NUM_BITS_PER_CLASS, so there are
-    //   BITS_PER_WERD / NUM_BITS_PER_CLASS entries.
-    //   See Classify::ClassPruner in intmatcher.cpp.
-    max_classes_ = RoundUp(
-        max_classes, WERDS_PER_CP_VECTOR * BITS_PER_WERD / NUM_BITS_PER_CLASS);
-    class_count_ = new int[max_classes_];
-    norm_count_ = new int[max_classes_];
-    sort_key_ = new int[max_classes_ + 1];
-    sort_index_ = new int[max_classes_ + 1];
-    for (int i = 0; i < max_classes_; i++) {
-      class_count_[i] = 0;
-    }
-  }
+static uinT32 MultTruncShiftBits;
 
-  ~ClassPrunerData() {
-    delete []class_count_;
-    delete []norm_count_;
-    delete []sort_key_;
-    delete []sort_index_;
-  }
+static uinT32 TableTruncShiftBits;
 
-};
+uinT32 EvidenceMultMask;
 
-const float IntegerMatcher::kSEExponentialMultiplier = 0.0;
-const float IntegerMatcher::kSimilarityCenter = 0.0075;
+static inT16 LocalMatcherMultiplier;
 
-/*----------------------------------------------------------------------------
+make_int_var (ClassPrunerThreshold, 229, MakeClassPrunerThreshold,
+16, 20, SetClassPrunerThreshold,
+"Class Pruner Threshold 0-255:        ");
+
+make_int_var (ClassPrunerMultiplier, 30, MakeClassPrunerMultiplier,
+16, 21, SetClassPrunerMultiplier,
+"Class Pruner Multiplier 0-255:       ");
+
+make_int_var (IntegerMatcherMultiplier, 14, MakeIntegerMatcherMultiplier,
+16, 22, SetIntegerMatcherMultiplier,
+"Integer Matcher Multiplier  0-255:   ");
+
+make_int_var (IntThetaFudge, 128, MakeIntThetaFudge,
+16, 23, SetIntThetaFudge,
+"Integer Matcher Theta Fudge 0-255:   ");
+
+make_int_var (CPCutoffStrength, 7, MakeCPCutoffStrength,
+16, 24, SetCPCutoffStrength,
+"Class Pruner CutoffStrength:         ");
+
+make_int_var (EvidenceTableBits, 9, MakeEvidenceTableBits,
+16, 25, SetEvidenceTableBits,
+"Bits in Similarity to Evidence Lookup  8-9:   ");
+
+make_int_var (IntEvidenceTruncBits, 14, MakeIntEvidenceTruncBits,
+16, 26, SetIntEvidenceTruncBits,
+"Integer Evidence Truncation Bits (Distance) 8-14:   ");
+
+make_float_var (SEExponentialMultiplier, 0, MakeSEExponentialMultiplier,
+16, 27, SetSEExponentialMultiplier,
+"Similarity to Evidence Table Exponential Multiplier: ");
+
+make_float_var (SimilarityCenter, 0.0075, MakeSimilarityCenter,
+16, 28, SetSimilarityCenter, "Center of Similarity Curve: ");
+
+make_int_var (AdaptProtoThresh, 230, MakeAdaptProtoThresh,
+16, 29, SetAdaptProtoThresh,
+"Threshold for good protos during adaptive 0-255:   ");
+
+make_int_var (AdaptFeatureThresh, 230, MakeAdaptFeatureThresh,
+16, 30, SetAdaptFeatureThresh,
+"Threshold for good features during adaptive 0-255:   ");
+//extern int display_ratings;
+//extern inT32                                  cp_maps[4];
+
+int protoword_lookups;
+int zero_protowords;
+int proto_shifts;
+int set_proto_bits;
+int config_shifts;
+int set_config_bits;
+
+/**----------------------------------------------------------------------------
               Public Code
-----------------------------------------------------------------------------*/
+----------------------------------------------------------------------------**/
 /*---------------------------------------------------------------------------*/
-namespace tesseract {
-int Classify::ClassPruner(INT_TEMPLATES IntTemplates,
-                          inT16 NumFeatures,
-                          INT_FEATURE_ARRAY Features,
-                          CLASS_NORMALIZATION_ARRAY NormalizationFactors,
-                          CLASS_CUTOFF_ARRAY ExpectedNumFeatures,
-                          CLASS_PRUNER_RESULTS Results) {
+int ClassPruner(INT_TEMPLATES IntTemplates,
+                inT16 NumFeatures,
+                INT_FEATURE_ARRAY Features,
+                CLASS_NORMALIZATION_ARRAY NormalizationFactors,
+                CLASS_CUTOFF_ARRAY ExpectedNumFeatures,
+                CLASS_PRUNER_RESULTS Results,
+                int Debug) {
 /*
  **      Parameters:
  **              IntTemplates           Class pruner tables
@@ -149,6 +174,10 @@ int Classify::ClassPruner(INT_TEMPLATES IntTemplates,
  **                                     (by CLASS_INDEX)
  **              Results                Sorted Array of pruned classes
  **                                     (by CLASS_ID)
+ **              Debug                  Debugger flag: 1=debugger on
+ **      Globals:
+ **              ClassPrunerThreshold   Cutoff threshold
+ **              ClassPrunerMultiplier  Normalization factor multiplier
  **      Operation:
  **              Prune the classes using a modified fast match table.
  **              Return a sorted list of classes along with the number
@@ -168,144 +197,130 @@ int Classify::ClassPruner(INT_TEMPLATES IntTemplates,
   int NumPruners;
   inT32 feature_index;           //current feature
 
-  int MaxNumClasses = IntTemplates->NumClasses;
-  ClassPrunerData data(IntTemplates->NumClasses);
-  int *ClassCount = data.class_count_;
-  int *NormCount = data.norm_count_;
-  int *SortKey = data.sort_key_;
-  int *SortIndex = data.sort_index_;
-
+  static int ClassCount[MAX_NUM_CLASSES];
+  static int NormCount[MAX_NUM_CLASSES];
+  static int SortKey[MAX_NUM_CLASSES + 1];
+  static int SortIndex[MAX_NUM_CLASSES + 1];
+  CLASS_INDEX Class;
   int out_class;
+  int MaxNumClasses;
   int MaxCount;
   int NumClasses;
   FLOAT32 max_rating;            //max allowed rating
-  CLASS_ID class_id;
+  int *ClassCountPtr;
+  CLASS_ID classch;
+
+  MaxNumClasses = IntTemplates->NumClasses;
+
+  /* Clear Class Counts */
+  ClassCountPtr = &(ClassCount[0]);
+  for (Class = 0; Class < MaxNumClasses; Class++) {
+    *ClassCountPtr++ = 0;
+  }
 
   /* Update Class Counts */
   NumPruners = IntTemplates->NumClassPruners;
   for (feature_index = 0; feature_index < NumFeatures; feature_index++) {
     feature = &Features[feature_index];
-    feature_address = (((feature->X * NUM_CP_BUCKETS >> 8) * NUM_CP_BUCKETS +
-                        (feature->Y * NUM_CP_BUCKETS >> 8)) * NUM_CP_BUCKETS +
-                       (feature->Theta * NUM_CP_BUCKETS >> 8)) << 1;
+    feature_address = (((feature->X * NUM_CP_BUCKETS >> 8) * NUM_CP_BUCKETS
+      +
+      (feature->Y * NUM_CP_BUCKETS >> 8)) *
+      NUM_CP_BUCKETS +
+      (feature->Theta * NUM_CP_BUCKETS >> 8)) << 1;
     ClassPruner = IntTemplates->ClassPruner;
     class_index = 0;
-
     for (PrunerSet = 0; PrunerSet < NumPruners; PrunerSet++, ClassPruner++) {
       BasePrunerAddress = (uinT32 *) (*ClassPruner) + feature_address;
 
       for (Word = 0; Word < WERDS_PER_CP_VECTOR; Word++) {
         PrunerWord = *BasePrunerAddress++;
-        // This inner loop is unrolled to speed up the ClassPruner.
-        // Currently gcc would not unroll it unless it is set to O3
-        // level of optimization or -funroll-loops is specified.
-        /*
-        uinT32 class_mask = (1 << NUM_BITS_PER_CLASS) - 1;
-        for (int bit = 0; bit < BITS_PER_WERD/NUM_BITS_PER_CLASS; bit++) {
-          ClassCount[class_index++] += PrunerWord & class_mask;
-          PrunerWord >>= NUM_BITS_PER_CLASS;
-        }
-        */
-        ClassCount[class_index++] += PrunerWord & CLASS_PRUNER_CLASS_MASK;
-        PrunerWord >>= NUM_BITS_PER_CLASS;
-        ClassCount[class_index++] += PrunerWord & CLASS_PRUNER_CLASS_MASK;
-        PrunerWord >>= NUM_BITS_PER_CLASS;
-        ClassCount[class_index++] += PrunerWord & CLASS_PRUNER_CLASS_MASK;
-        PrunerWord >>= NUM_BITS_PER_CLASS;
-        ClassCount[class_index++] += PrunerWord & CLASS_PRUNER_CLASS_MASK;
-        PrunerWord >>= NUM_BITS_PER_CLASS;
-        ClassCount[class_index++] += PrunerWord & CLASS_PRUNER_CLASS_MASK;
-        PrunerWord >>= NUM_BITS_PER_CLASS;
-        ClassCount[class_index++] += PrunerWord & CLASS_PRUNER_CLASS_MASK;
-        PrunerWord >>= NUM_BITS_PER_CLASS;
-        ClassCount[class_index++] += PrunerWord & CLASS_PRUNER_CLASS_MASK;
-        PrunerWord >>= NUM_BITS_PER_CLASS;
-        ClassCount[class_index++] += PrunerWord & CLASS_PRUNER_CLASS_MASK;
-        PrunerWord >>= NUM_BITS_PER_CLASS;
-        ClassCount[class_index++] += PrunerWord & CLASS_PRUNER_CLASS_MASK;
-        PrunerWord >>= NUM_BITS_PER_CLASS;
-        ClassCount[class_index++] += PrunerWord & CLASS_PRUNER_CLASS_MASK;
-        PrunerWord >>= NUM_BITS_PER_CLASS;
-        ClassCount[class_index++] += PrunerWord & CLASS_PRUNER_CLASS_MASK;
-        PrunerWord >>= NUM_BITS_PER_CLASS;
-        ClassCount[class_index++] += PrunerWord & CLASS_PRUNER_CLASS_MASK;
-        PrunerWord >>= NUM_BITS_PER_CLASS;
-        ClassCount[class_index++] += PrunerWord & CLASS_PRUNER_CLASS_MASK;
-        PrunerWord >>= NUM_BITS_PER_CLASS;
-        ClassCount[class_index++] += PrunerWord & CLASS_PRUNER_CLASS_MASK;
-        PrunerWord >>= NUM_BITS_PER_CLASS;
-        ClassCount[class_index++] += PrunerWord & CLASS_PRUNER_CLASS_MASK;
-        PrunerWord >>= NUM_BITS_PER_CLASS;
-        ClassCount[class_index++] += PrunerWord & CLASS_PRUNER_CLASS_MASK;
+        ClassCount[class_index++] += cp_maps[PrunerWord & 3];
+        PrunerWord >>= 2;
+        ClassCount[class_index++] += cp_maps[PrunerWord & 3];
+        PrunerWord >>= 2;
+        ClassCount[class_index++] += cp_maps[PrunerWord & 3];
+        PrunerWord >>= 2;
+        ClassCount[class_index++] += cp_maps[PrunerWord & 3];
+        PrunerWord >>= 2;
+        ClassCount[class_index++] += cp_maps[PrunerWord & 3];
+        PrunerWord >>= 2;
+        ClassCount[class_index++] += cp_maps[PrunerWord & 3];
+        PrunerWord >>= 2;
+        ClassCount[class_index++] += cp_maps[PrunerWord & 3];
+        PrunerWord >>= 2;
+        ClassCount[class_index++] += cp_maps[PrunerWord & 3];
+        PrunerWord >>= 2;
+        ClassCount[class_index++] += cp_maps[PrunerWord & 3];
+        PrunerWord >>= 2;
+        ClassCount[class_index++] += cp_maps[PrunerWord & 3];
+        PrunerWord >>= 2;
+        ClassCount[class_index++] += cp_maps[PrunerWord & 3];
+        PrunerWord >>= 2;
+        ClassCount[class_index++] += cp_maps[PrunerWord & 3];
+        PrunerWord >>= 2;
+        ClassCount[class_index++] += cp_maps[PrunerWord & 3];
+        PrunerWord >>= 2;
+        ClassCount[class_index++] += cp_maps[PrunerWord & 3];
+        PrunerWord >>= 2;
+        ClassCount[class_index++] += cp_maps[PrunerWord & 3];
+        PrunerWord >>= 2;
+        ClassCount[class_index++] += cp_maps[PrunerWord & 3];
       }
     }
   }
 
   /* Adjust Class Counts for Number of Expected Features */
-  for (class_id = 0; class_id < MaxNumClasses; class_id++) {
-    if (NumFeatures < ExpectedNumFeatures[class_id]) {
-      int deficit = ExpectedNumFeatures[class_id] - NumFeatures;
-      ClassCount[class_id] -= ClassCount[class_id] * deficit /
-        (NumFeatures * classify_cp_cutoff_strength + deficit);
+  for (Class = 0; Class < MaxNumClasses; Class++) {
+    if (NumFeatures < ExpectedNumFeatures[Class]) {
+      int deficit = ExpectedNumFeatures[Class] - NumFeatures;
+      ClassCount[Class] -= ClassCount[Class] * deficit /
+                           (NumFeatures*CPCutoffStrength + deficit);
     }
-    if (!unicharset.get_enabled(class_id))
-      ClassCount[class_id] = 0;  // This char is disabled!
-
-    // Do not include character fragments in the class pruner
-    // results if disable_character_fragments is true.
-    if (disable_character_fragments && unicharset.get_fragment(class_id)) {
-      ClassCount[class_id] = 0;
-    }
+    if (!unicharset.get_enabled(IntTemplates->ClassIdFor[Class]))
+      ClassCount[Class] = 0;  // This char is disabled!
   }
 
   /* Adjust Class Counts for Normalization Factors */
   MaxCount = 0;
-  for (class_id = 0; class_id < MaxNumClasses; class_id++) {
-    NormCount[class_id] = ClassCount[class_id]
-      - ((classify_class_pruner_multiplier * NormalizationFactors[class_id])
-          >> 8);
-    if (NormCount[class_id] > MaxCount &&
-        // This additional check is added in order to ensure that
-        // the classifier will return at least one non-fragmented
-        // character match.
-        // TODO(daria): verify that this helps accuracy and does not
-        // hurt performance.
-        !unicharset.get_fragment(class_id)) {
-      MaxCount = NormCount[class_id];
-    }
+  for (Class = 0; Class < MaxNumClasses; Class++) {
+    NormCount[Class] = ClassCount[Class]
+      - ((ClassPrunerMultiplier * NormalizationFactors[Class]) >> 8)
+      * cp_maps[3] / 3;
+    if (NormCount[Class] > MaxCount)
+      MaxCount = NormCount[Class];
   }
 
   /* Prune Classes */
-  MaxCount *= classify_class_pruner_threshold;
+  MaxCount *= ClassPrunerThreshold;
   MaxCount >>= 8;
   /* Select Classes */
   if (MaxCount < 1)
     MaxCount = 1;
   NumClasses = 0;
-  for (class_id = 0; class_id < MaxNumClasses; class_id++) {
-    if (NormCount[class_id] >= MaxCount) {
-      NumClasses++;
-      SortIndex[NumClasses] = class_id;
-      SortKey[NumClasses] = NormCount[class_id];
-    }
+  for (Class = 0; Class < MaxNumClasses; Class++)
+  if (NormCount[Class] >= MaxCount) {
+    NumClasses++;
+    SortIndex[NumClasses] = Class;
+    SortKey[NumClasses] = NormCount[Class];
   }
 
   /* Sort Classes using Heapsort Algorithm */
   if (NumClasses > 1)
     HeapSort(NumClasses, SortKey, SortIndex);
 
-  if (classify_debug_level > 1) {
+  if (display_ratings > 1) {
     cprintf ("CP:%d classes, %d features:\n", NumClasses, NumFeatures);
-    for (class_id = 0; class_id < NumClasses; class_id++) {
+    for (Class = 0; Class < NumClasses; Class++) {
+      classch = IntTemplates->ClassIdFor[SortIndex[NumClasses - Class]];
       cprintf ("%s:C=%d, E=%d, N=%d, Rat=%d\n",
-               unicharset.debug_str(SortIndex[NumClasses - class_id]).string(),
-               ClassCount[SortIndex[NumClasses - class_id]],
-               ExpectedNumFeatures[SortIndex[NumClasses - class_id]],
-               SortKey[NumClasses - class_id],
-               1010 - 1000 * SortKey[NumClasses - class_id] /
-                 (CLASS_PRUNER_CLASS_MASK * NumFeatures));
+               unicharset.id_to_unichar(classch),
+               ClassCount[SortIndex[NumClasses - Class]],
+               ExpectedNumFeatures[SortIndex[NumClasses - Class]],
+               SortKey[NumClasses - Class],
+               1010 - 1000 * SortKey[NumClasses - Class] /
+                 (cp_maps[3] * NumFeatures));
     }
-    if (classify_debug_level > 2) {
+    if (display_ratings > 2) {
       NumPruners = IntTemplates->NumClassPruners;
       for (feature_index = 0; feature_index < NumFeatures;
       feature_index++) {
@@ -324,24 +339,25 @@ int Classify::ClassPruner(INT_TEMPLATES IntTemplates,
 
           for (Word = 0; Word < WERDS_PER_CP_VECTOR; Word++) {
             PrunerWord = *BasePrunerAddress++;
-            for (class_id = 0; class_id < 16; class_id++, class_index++) {
+            for (Class = 0; Class < 16; Class++, class_index++) {
               if (NormCount[class_index] >= MaxCount)
                 cprintf (" %s=%d,",
-                  unicharset.id_to_unichar(class_index),
-                  PrunerWord & CLASS_PRUNER_CLASS_MASK);
-              PrunerWord >>= NUM_BITS_PER_CLASS;
+                  unicharset.id_to_unichar(IntTemplates->ClassIdFor[class_index]),
+                  PrunerWord & 3);
+              PrunerWord >>= 2;
             }
           }
         }
         cprintf ("\n");
       }
       cprintf ("Adjustments:");
-      for (class_id = 0; class_id < MaxNumClasses; class_id++) {
-        if (NormCount[class_id] > MaxCount)
-          cprintf(" %s=%d,",
-            unicharset.id_to_unichar(class_id),
-            -((classify_class_pruner_multiplier *
-               NormalizationFactors[class_id]) >> 8));
+      for (Class = 0; Class < MaxNumClasses; Class++) {
+        if (NormCount[Class] > MaxCount)
+          cprintf (" %s=%d,",
+            unicharset.id_to_unichar(IntTemplates->ClassIdFor[Class]),
+            -((ClassPrunerMultiplier *
+            NormalizationFactors[Class]) >> 8) * cp_maps[3] /
+            3);
       }
       cprintf ("\n");
     }
@@ -349,31 +365,30 @@ int Classify::ClassPruner(INT_TEMPLATES IntTemplates,
 
   /* Set Up Results */
   max_rating = 0.0f;
-  for (class_id = 0, out_class = 0; class_id < NumClasses; class_id++) {
-    Results[out_class].Class = SortIndex[NumClasses - class_id];
+  for (Class = 0, out_class = 0; Class < NumClasses; Class++) {
+    Results[out_class].Class =
+      IntTemplates->ClassIdFor[SortIndex[NumClasses - Class]];
     Results[out_class].Rating =
-      1.0 - SortKey[NumClasses - class_id] /
-      (static_cast<float>(CLASS_PRUNER_CLASS_MASK) * NumFeatures);
+      1.0 - SortKey[NumClasses -
+      Class] / ((float) cp_maps[3] * NumFeatures);
     out_class++;
   }
   NumClasses = out_class;
   return NumClasses;
+
 }
 
-}  // namespace tesseract
 
 /*---------------------------------------------------------------------------*/
-void IntegerMatcher::Match(INT_CLASS ClassTemplate,
-                           BIT_VECTOR ProtoMask,
-                           BIT_VECTOR ConfigMask,
-                           uinT16 BlobLength,
-                           inT16 NumFeatures,
-                           INT_FEATURE_ARRAY Features,
-                           uinT8 NormalizationFactor,
-                           INT_RESULT Result,
-                           int AdaptFeatureThreshold,
-                           int Debug,
-                           bool SeparateDebugWindows) {
+void IntegerMatcher(INT_CLASS ClassTemplate,
+                    BIT_VECTOR ProtoMask,
+                    BIT_VECTOR ConfigMask,
+                    uinT16 BlobLength,
+                    inT16 NumFeatures,
+                    INT_FEATURE_ARRAY Features,
+                    uinT8 NormalizationFactor,
+                    INT_RESULT Result,
+                    int Debug) {
 /*
  **      Parameters:
  **              ClassTemplate             Prototypes & tables for a class
@@ -386,7 +401,9 @@ void IntegerMatcher::Match(INT_CLASS ClassTemplate,
  **                                        (0.0 -> 1.0), 0=good, 1=bad
  **              Debug                     Debugger flag: 1=debugger on
  **      Globals:
- **              local_matcher_multiplier_    Normalization factor multiplier
+ **              LocalMatcherMultiplier    Normalization factor multiplier
+ **              IntThetaFudge             Theta fudge factor used for
+ **                                        evidence calculation
  **      Operation:
  **              IntegerMatcher returns the best configuration and rating
  **              for a single class.  The class matched against is determined
@@ -396,72 +413,92 @@ void IntegerMatcher::Match(INT_CLASS ClassTemplate,
  **      Exceptions: none
  **      History: Tue Feb 19 16:36:23 MST 1991, RWM, Created.
  */
-  ScratchEvidence *tables = new ScratchEvidence();
+  static uinT8 FeatureEvidence[MAX_NUM_CONFIGS];
+  static int SumOfFeatureEvidence[MAX_NUM_CONFIGS];
+  static uinT8 ProtoEvidence[MAX_NUM_PROTOS][MAX_PROTO_INDEX];
   int Feature;
   int BestMatch;
 
   if (MatchDebuggingOn (Debug))
     cprintf ("Integer Matcher -------------------------------------------\n");
 
-  tables->Clear(ClassTemplate);
+  IMClearTables(ClassTemplate, SumOfFeatureEvidence, ProtoEvidence);
   Result->FeatureMisses = 0;
 
   for (Feature = 0; Feature < NumFeatures; Feature++) {
-    int csum = UpdateTablesForFeature(ClassTemplate, ProtoMask, ConfigMask,
-                                      Feature, &Features[Feature],
-                                      tables, Debug);
+    int csum = IMUpdateTablesForFeature(ClassTemplate, ProtoMask, ConfigMask,
+                                        Feature, &(Features[Feature]),
+                                        FeatureEvidence, SumOfFeatureEvidence,
+                                        ProtoEvidence, Debug);
     // Count features that were missed over all configs.
     if (csum == 0)
       Result->FeatureMisses++;
   }
 
 #ifndef GRAPHICS_DISABLED
-  if (PrintProtoMatchesOn(Debug) || PrintMatchSummaryOn(Debug)) {
-    DebugFeatureProtoError(ClassTemplate, ProtoMask, ConfigMask, *tables,
-                           NumFeatures, Debug);
-  }
+  if (PrintProtoMatchesOn (Debug) || PrintMatchSummaryOn (Debug))
+    IMDebugFeatureProtoError(ClassTemplate,
+                             ProtoMask,
+                             ConfigMask,
+                             SumOfFeatureEvidence,
+                             ProtoEvidence,
+                             NumFeatures,
+                             Debug);
 
-  if (DisplayProtoMatchesOn(Debug)) {
-    DisplayProtoDebugInfo(ClassTemplate, ProtoMask, ConfigMask,
-                          *tables, SeparateDebugWindows);
-  }
+  if (DisplayProtoMatchesOn (Debug))
+    IMDisplayProtoDebugInfo(ClassTemplate,
+                            ProtoMask,
+                            ConfigMask,
+                            ProtoEvidence,
+                            Debug);
 
-  if (DisplayFeatureMatchesOn(Debug)) {
-    DisplayFeatureDebugInfo(ClassTemplate, ProtoMask, ConfigMask, NumFeatures,
-                            Features, AdaptFeatureThreshold, Debug,
-                            SeparateDebugWindows);
-  }
+  if (DisplayFeatureMatchesOn (Debug))
+    IMDisplayFeatureDebugInfo(ClassTemplate,
+                              ProtoMask,
+                              ConfigMask,
+                              NumFeatures,
+                              Features,
+                              Debug);
 #endif
 
-  tables->UpdateSumOfProtoEvidences(ClassTemplate, ConfigMask, NumFeatures);
-  tables->NormalizeSums(ClassTemplate, NumFeatures, NumFeatures);
+  IMUpdateSumOfProtoEvidences(ClassTemplate,
+                              ConfigMask,
+                              SumOfFeatureEvidence,
+                              ProtoEvidence,
+                              NumFeatures);
 
-  BestMatch = FindBestMatch(ClassTemplate, *tables, BlobLength,
-                            NormalizationFactor, Result);
+  IMNormalizeSumOfEvidences(ClassTemplate,
+                            SumOfFeatureEvidence,
+                            NumFeatures,
+                            NumFeatures);
+
+  BestMatch =
+    IMFindBestMatch(ClassTemplate,
+                    SumOfFeatureEvidence,
+                    BlobLength,
+                    NormalizationFactor,
+                    Result);
 
 #ifndef GRAPHICS_DISABLED
-  if (PrintMatchSummaryOn(Debug))
-    DebugBestMatch(BestMatch, Result, BlobLength, NormalizationFactor);
+  if (PrintMatchSummaryOn (Debug))
+    IMDebugBestMatch(BestMatch, Result, BlobLength, NormalizationFactor);
 
-  if (MatchDebuggingOn(Debug))
-    cprintf("Match Complete --------------------------------------------\n");
+  if (MatchDebuggingOn (Debug))
+    cprintf ("Match Complete --------------------------------------------\n");
 #endif
 
-  delete tables;
 }
 
 
 /*---------------------------------------------------------------------------*/
-int IntegerMatcher::FindGoodProtos(
-    INT_CLASS ClassTemplate,
-    BIT_VECTOR ProtoMask,
-    BIT_VECTOR ConfigMask,
-    uinT16 BlobLength,
-    inT16 NumFeatures,
-    INT_FEATURE_ARRAY Features,
-    PROTO_ID *ProtoArray,
-    int AdaptProtoThreshold,
-    int Debug) {
+int FindGoodProtos(INT_CLASS ClassTemplate,
+                   BIT_VECTOR ProtoMask,
+                   BIT_VECTOR ConfigMask,
+                   uinT16 BlobLength,
+                   inT16 NumFeatures,
+                   INT_FEATURE_ARRAY Features,
+                   PROTO_ID *ProtoArray,
+                   int Debug) {
 /*
  **      Parameters:
  **              ClassTemplate             Prototypes & tables for a class
@@ -471,52 +508,71 @@ int IntegerMatcher::FindGoodProtos(
  **              NumFeatures               Number of features in blob
  **              Features                  Array of features
  **              ProtoArray                Array of good protos
- **              AdaptProtoThreshold       Threshold for good protos
  **              Debug                     Debugger flag: 1=debugger on
  **      Globals:
- **              local_matcher_multiplier_    Normalization factor multiplier
+ **              LocalMatcherMultiplier    Normalization factor multiplier
+ **              IntThetaFudge             Theta fudge factor used for
+ **                                        evidence calculation
+ **              AdaptProtoThresh          Threshold for good protos
  **      Operation:
  **              FindGoodProtos finds all protos whose normalized proto-evidence
- **              exceed classify_adapt_proto_thresh.  The list is ordered by increasing
+ **              exceed AdaptProtoThresh.  The list is ordered by increasing
  **              proto id number.
  **      Return:
  **              Number of good protos in ProtoArray.
  **      Exceptions: none
  **      History: Tue Mar 12 17:09:26 MST 1991, RWM, Created
  */
-  ScratchEvidence *tables = new ScratchEvidence();
-  int NumGoodProtos = 0;
+  static uinT8 FeatureEvidence[MAX_NUM_CONFIGS];
+  static int SumOfFeatureEvidence[MAX_NUM_CONFIGS];
+  static uinT8 ProtoEvidence[MAX_NUM_PROTOS][MAX_PROTO_INDEX];
+  int Feature;
+  register uinT8 *UINT8Pointer;
+  register int ProtoIndex;
+  int NumProtos;
+  int NumGoodProtos;
+  uinT16 ActualProtoNum;
+  register int Temp;
 
   /* DEBUG opening heading */
   if (MatchDebuggingOn (Debug))
     cprintf
       ("Find Good Protos -------------------------------------------\n");
 
-  tables->Clear(ClassTemplate);
+  IMClearTables(ClassTemplate, SumOfFeatureEvidence, ProtoEvidence);
 
-  for (int Feature = 0; Feature < NumFeatures; Feature++)
-    UpdateTablesForFeature(
-        ClassTemplate, ProtoMask, ConfigMask, Feature, &(Features[Feature]),
-        tables, Debug);
+  for (Feature = 0; Feature < NumFeatures; Feature++)
+    IMUpdateTablesForFeature (ClassTemplate, ProtoMask, ConfigMask, Feature,
+      &(Features[Feature]), FeatureEvidence,
+      SumOfFeatureEvidence, ProtoEvidence, Debug);
 
 #ifndef GRAPHICS_DISABLED
   if (PrintProtoMatchesOn (Debug) || PrintMatchSummaryOn (Debug))
-    DebugFeatureProtoError(ClassTemplate, ProtoMask, ConfigMask, *tables,
-                           NumFeatures, Debug);
+    IMDebugFeatureProtoError(ClassTemplate,
+                             ProtoMask,
+                             ConfigMask,
+                             SumOfFeatureEvidence,
+                             ProtoEvidence,
+                             NumFeatures,
+                             Debug);
 #endif
 
   /* Average Proto Evidences & Find Good Protos */
-  for (int proto = 0; proto < ClassTemplate->NumProtos; proto++) {
+  NumProtos = ClassTemplate->NumProtos;
+  NumGoodProtos = 0;
+  for (ActualProtoNum = 0; ActualProtoNum < NumProtos; ActualProtoNum++) {
     /* Compute Average for Actual Proto */
-    int Temp = 0;
-    for (int i = 0; i < ClassTemplate->ProtoLengths[proto]; i++)
-      Temp += tables->proto_evidence_[proto][i];
+    Temp = 0;
+    UINT8Pointer = &(ProtoEvidence[ActualProtoNum][0]);
+    for (ProtoIndex = ClassTemplate->ProtoLengths[ActualProtoNum];
+      ProtoIndex > 0; ProtoIndex--, UINT8Pointer++)
+    Temp += *UINT8Pointer;
 
-    Temp /= ClassTemplate->ProtoLengths[proto];
+    Temp /= ClassTemplate->ProtoLengths[ActualProtoNum];
 
     /* Find Good Protos */
-    if (Temp >= AdaptProtoThreshold) {
-      *ProtoArray = proto;
+    if (Temp >= AdaptProtoThresh) {
+      *ProtoArray = ActualProtoNum;
       ProtoArray++;
       NumGoodProtos++;
     }
@@ -524,63 +580,77 @@ int IntegerMatcher::FindGoodProtos(
 
   if (MatchDebuggingOn (Debug))
     cprintf ("Match Complete --------------------------------------------\n");
-  delete tables;
-
   return NumGoodProtos;
+
 }
 
 
 /*---------------------------------------------------------------------------*/
-int IntegerMatcher::FindBadFeatures(
-    INT_CLASS ClassTemplate,
-    BIT_VECTOR ProtoMask,
-    BIT_VECTOR ConfigMask,
-    uinT16 BlobLength,
-    inT16 NumFeatures,
-    INT_FEATURE_ARRAY Features,
-    FEATURE_ID *FeatureArray,
-    int AdaptFeatureThreshold,
-    int Debug) {
+int FindBadFeatures(INT_CLASS ClassTemplate,
+                    BIT_VECTOR ProtoMask,
+                    BIT_VECTOR ConfigMask,
+                    uinT16 BlobLength,
+                    inT16 NumFeatures,
+                    INT_FEATURE_ARRAY Features,
+                    FEATURE_ID *FeatureArray,
+                    int Debug) {
 /*
- **  Parameters:
- **      ClassTemplate             Prototypes & tables for a class
- **      ProtoMask                 AND Mask for proto word
- **      ConfigMask                AND Mask for config word
- **      BlobLength                Length of unormalized blob
- **      NumFeatures               Number of features in blob
- **      Features                  Array of features
- **      FeatureArray              Array of bad features
- **      AdaptFeatureThreshold     Threshold for bad features
- **      Debug                     Debugger flag: 1=debugger on
- **  Operation:
- **      FindBadFeatures finds all features with maximum feature-evidence <
- **      AdaptFeatureThresh. The list is ordered by increasing feature number.
- **  Return:
- **      Number of bad features in FeatureArray.
- **  History: Tue Mar 12 17:09:26 MST 1991, RWM, Created
+ **      Parameters:
+ **              ClassTemplate             Prototypes & tables for a class
+ **              ProtoMask                 AND Mask for proto word
+ **              ConfigMask                AND Mask for config word
+ **              BlobLength                Length of unormalized blob
+ **              NumFeatures               Number of features in blob
+ **              Features                  Array of features
+ **              FeatureArray              Array of bad features
+ **              Debug                     Debugger flag: 1=debugger on
+ **      Globals:
+ **              LocalMatcherMultiplier    Normalization factor multiplier
+ **              IntThetaFudge             Theta fudge factor used for
+ **                                        evidence calculation
+ **              AdaptFeatureThresh        Threshold for bad features
+ **      Operation:
+ **              FindBadFeatures finds all features whose maximum feature-evidence
+ **              was less than AdaptFeatureThresh.  The list is ordered by increasing
+ **              feature number.
+ **      Return:
+ **              Number of bad features in FeatureArray.
+ **      Exceptions: none
+ **      History: Tue Mar 12 17:09:26 MST 1991, RWM, Created
  */
-  ScratchEvidence *tables = new ScratchEvidence();
-  int NumBadFeatures = 0;
+  static uinT8 FeatureEvidence[MAX_NUM_CONFIGS];
+  static int SumOfFeatureEvidence[MAX_NUM_CONFIGS];
+  static uinT8 ProtoEvidence[MAX_NUM_PROTOS][MAX_PROTO_INDEX];
+  int Feature;
+  register uinT8 *UINT8Pointer;
+  register int ConfigNum;
+  int NumConfigs;
+  int NumBadFeatures;
+  register int Temp;
 
   /* DEBUG opening heading */
-  if (MatchDebuggingOn(Debug))
-    cprintf("Find Bad Features -------------------------------------------\n");
+  if (MatchDebuggingOn (Debug))
+    cprintf
+      ("Find Bad Features -------------------------------------------\n");
 
-  tables->Clear(ClassTemplate);
+  IMClearTables(ClassTemplate, SumOfFeatureEvidence, ProtoEvidence);
 
-  for (int Feature = 0; Feature < NumFeatures; Feature++) {
-    UpdateTablesForFeature(
-        ClassTemplate, ProtoMask, ConfigMask, Feature, &Features[Feature],
-        tables, Debug);
+  NumBadFeatures = 0;
+  NumConfigs = ClassTemplate->NumConfigs;
+  for (Feature = 0; Feature < NumFeatures; Feature++) {
+    IMUpdateTablesForFeature (ClassTemplate, ProtoMask, ConfigMask, Feature,
+      &(Features[Feature]), FeatureEvidence,
+      SumOfFeatureEvidence, ProtoEvidence, Debug);
 
     /* Find Best Evidence for Current Feature */
-    int best = 0;
-    for (int i = 0; i < ClassTemplate->NumConfigs; i++)
-      if (tables->feature_evidence_[i] > best)
-        best = tables->feature_evidence_[i];
+    Temp = 0;
+    UINT8Pointer = FeatureEvidence;
+    for (ConfigNum = 0; ConfigNum < NumConfigs; ConfigNum++, UINT8Pointer++)
+      if (*UINT8Pointer > Temp)
+        Temp = *UINT8Pointer;
 
     /* Find Bad Features */
-    if (best < AdaptFeatureThreshold) {
+    if (Temp < AdaptFeatureThresh) {
       *FeatureArray = Feature;
       FeatureArray++;
       NumBadFeatures++;
@@ -588,78 +658,171 @@ int IntegerMatcher::FindBadFeatures(
   }
 
 #ifndef GRAPHICS_DISABLED
-  if (PrintProtoMatchesOn(Debug) || PrintMatchSummaryOn(Debug))
-    DebugFeatureProtoError(ClassTemplate, ProtoMask, ConfigMask, *tables,
-                           NumFeatures, Debug);
+  if (PrintProtoMatchesOn (Debug) || PrintMatchSummaryOn (Debug))
+    IMDebugFeatureProtoError(ClassTemplate,
+                             ProtoMask,
+                             ConfigMask,
+                             SumOfFeatureEvidence,
+                             ProtoEvidence,
+                             NumFeatures,
+                             Debug);
 #endif
 
-  if (MatchDebuggingOn(Debug))
-    cprintf("Match Complete --------------------------------------------\n");
+  if (MatchDebuggingOn (Debug))
+    cprintf ("Match Complete --------------------------------------------\n");
 
-  delete tables;
   return NumBadFeatures;
+
 }
 
 
 /*---------------------------------------------------------------------------*/
-void IntegerMatcher::Init(tesseract::IntParam *classify_debug_level,
-                          int classify_integer_matcher_multiplier) {
-  classify_debug_level_ = classify_debug_level;
+void InitIntegerMatcher() {
+  int i;
+  uinT32 IntSimilarity;
+  double Similarity;
+  double Evidence;
+  double ScaleFactor;
 
   /* Set default mode of operation of IntegerMatcher */
-  SetCharNormMatch(classify_integer_matcher_multiplier);
+  SetCharNormMatch();
 
   /* Initialize table for evidence to similarity lookup */
-  for (int i = 0; i < SE_TABLE_SIZE; i++) {
-    uinT32 IntSimilarity = i << (27 - SE_TABLE_BITS);
-    double Similarity = ((double) IntSimilarity) / 65536.0 / 65536.0;
-    double evidence = Similarity / kSimilarityCenter;
-    evidence = 255.0 / (evidence * evidence + 1.0);
+  for (i = 0; i < SE_TABLE_SIZE; i++) {
+    IntSimilarity = i << (27 - SE_TABLE_BITS);
+    Similarity = ((double) IntSimilarity) / 65536.0 / 65536.0;
+    Evidence = Similarity / SimilarityCenter;
+    Evidence *= Evidence;
+    Evidence += 1.0;
+    Evidence = 1.0 / Evidence;
+    Evidence *= 255.0;
 
-    if (kSEExponentialMultiplier > 0.0) {
-      double scale = 1.0 - exp(-kSEExponentialMultiplier) *
-        exp(kSEExponentialMultiplier * ((double) i / SE_TABLE_SIZE));
-      evidence *= ClipToRange(scale, 0.0, 1.0);
+    if (SEExponentialMultiplier > 0.0) {
+      ScaleFactor = 1.0 - exp (-SEExponentialMultiplier) *
+        exp (SEExponentialMultiplier * ((double) i / SE_TABLE_SIZE));
+      if (ScaleFactor > 1.0)
+        ScaleFactor = 1.0;
+      if (ScaleFactor < 0.0)
+        ScaleFactor = 0.0;
+      Evidence *= ScaleFactor;
     }
 
-    similarity_evidence_table_[i] = (uinT8) (evidence + 0.5);
+    SimilarityEvidenceTable[i] = (uinT8) (Evidence + 0.5);
   }
 
   /* Initialize evidence computation variables */
-  evidence_table_mask_ =
-    ((1 << kEvidenceTableBits) - 1) << (9 - kEvidenceTableBits);
-  mult_trunc_shift_bits_ = (14 - kIntEvidenceTruncBits);
-  table_trunc_shift_bits_ = (27 - SE_TABLE_BITS - (mult_trunc_shift_bits_ << 1));
-  evidence_mult_mask_ = ((1 << kIntEvidenceTruncBits) - 1);
-}
+  EvidenceTableMask =
+    ((1 << EvidenceTableBits) - 1) << (9 - EvidenceTableBits);
+  MultTruncShiftBits = (14 - IntEvidenceTruncBits);
+  TableTruncShiftBits = (27 - SE_TABLE_BITS - (MultTruncShiftBits << 1));
+  EvidenceMultMask = ((1 << IntEvidenceTruncBits) - 1);
 
-/*--------------------------------------------------------------------------*/
-void IntegerMatcher::SetBaseLineMatch() {
-  local_matcher_multiplier_ = 0;
 }
 
 
+/*---------------------------------------------------------------------------*/
+void InitIntegerMatcherVars() {
+  MakeClassPrunerThreshold();
+  MakeClassPrunerMultiplier();
+  MakeIntegerMatcherMultiplier();
+  MakeIntThetaFudge();
+  MakeCPCutoffStrength();
+  MakeEvidenceTableBits();
+  MakeIntEvidenceTruncBits();
+  MakeSEExponentialMultiplier();
+  MakeSimilarityCenter();
+}
+
+
+/*-------------------------------------------------------------------------*/
+void PrintIntMatcherStats(FILE *f) {
+  fprintf (f, "protoword_lookups=%d, zero_protowords=%d, proto_shifts=%d\n",
+    protoword_lookups, zero_protowords, proto_shifts);
+  fprintf (f, "set_proto_bits=%d, config_shifts=%d, set_config_bits=%d\n",
+    set_proto_bits, config_shifts, set_config_bits);
+}
+
+
+/*-------------------------------------------------------------------------*/
+void SetProtoThresh(FLOAT32 Threshold) {
+  AdaptProtoThresh = (int) (255 * Threshold);
+  if (AdaptProtoThresh < 0)
+    AdaptProtoThresh = 0;
+  if (AdaptProtoThresh > 255)
+    AdaptProtoThresh = 255;
+}
+
+
+/*---------------------------------------------------------------------------*/
+void SetFeatureThresh(FLOAT32 Threshold) {
+  AdaptFeatureThresh = (int) (255 * Threshold);
+  if (AdaptFeatureThresh < 0)
+    AdaptFeatureThresh = 0;
+  if (AdaptFeatureThresh > 255)
+    AdaptFeatureThresh = 255;
+}
+
+
 /*--------------------------------------------------------------------------*/
-void IntegerMatcher::SetCharNormMatch(int integer_matcher_multiplier) {
-  local_matcher_multiplier_ = integer_matcher_multiplier;
+void SetBaseLineMatch() {
+  LocalMatcherMultiplier = 0;
+}
+
+
+/*--------------------------------------------------------------------------*/
+void SetCharNormMatch() {
+  LocalMatcherMultiplier = IntegerMatcherMultiplier;
 }
 
 
 /**----------------------------------------------------------------------------
               Private Code
 ----------------------------------------------------------------------------**/
-void ScratchEvidence::Clear(const INT_CLASS class_template) {
-  memset(sum_feature_evidence_, 0,
-         class_template->NumConfigs * sizeof(sum_feature_evidence_[0]));
-  memset(proto_evidence_, 0,
-         class_template->NumProtos * sizeof(proto_evidence_[0]));
+/*---------------------------------------------------------------------------*/
+void
+IMClearTables (INT_CLASS ClassTemplate,
+int SumOfFeatureEvidence[MAX_NUM_CONFIGS],
+uinT8 ProtoEvidence[MAX_NUM_PROTOS][MAX_PROTO_INDEX]) {
+/*
+ **      Parameters:
+ **              SumOfFeatureEvidence  Sum of Feature Evidence Table
+ **              NumConfigs            Number of Configurations
+ **              ProtoEvidence         Prototype Evidence Table
+ **              NumProtos             Number of Prototypes
+ **      Globals:
+ **      Operation:
+ **              Clear SumOfFeatureEvidence and ProtoEvidence tables.
+ **      Return:
+ **      Exceptions: none
+ **      History: Wed Feb 27 14:12:28 MST 1991, RWM, Created.
+ */
+  int NumProtos = ClassTemplate->NumProtos;
+  int NumConfigs = ClassTemplate->NumConfigs;
+
+  memset(SumOfFeatureEvidence, 0,
+         NumConfigs * sizeof(SumOfFeatureEvidence[0]));
+  memset(ProtoEvidence, 0,
+         NumProtos * sizeof(ProtoEvidence[0]));
 }
 
-void ScratchEvidence::ClearFeatureEvidence(const INT_CLASS class_template) {
-  memset(feature_evidence_, 0,
-         class_template->NumConfigs * sizeof(feature_evidence_[0]));
-}
 
+/*---------------------------------------------------------------------------*/
+void
+IMClearFeatureEvidenceTable (uinT8 FeatureEvidence[MAX_NUM_CONFIGS],
+int NumConfigs) {
+/*
+ **      Parameters:
+ **              FeatureEvidence  Feature Evidence Table
+ **              NumConfigs       Number of Configurations
+ **      Globals:
+ **      Operation:
+ **              Clear FeatureEvidence table.
+ **      Return:
+ **      Exceptions: none
+ **      History: Wed Feb 27 14:12:28 MST 1991, RWM, Created.
+ */
+  memset(FeatureEvidence, 0, NumConfigs * sizeof(*FeatureEvidence));
+}
 
 
 /*---------------------------------------------------------------------------*/
@@ -703,36 +866,47 @@ void IMDebugConfigurationSum(int FeatureNum,
  **      Exceptions: none
  **      History: Wed Feb 27 14:12:28 MST 1991, RWM, Created.
  */
-  cprintf("F=%3d, C=", FeatureNum);
-  for (int ConfigNum = 0; ConfigNum < ConfigCount; ConfigNum++) {
-    cprintf("%4d", FeatureEvidence[ConfigNum]);
+  int ConfigNum;
+
+  cprintf ("F=%3d, C=", (int) FeatureNum);
+
+  for (ConfigNum = 0; ConfigNum < ConfigCount; ConfigNum++) {
+    cprintf ("%4d", FeatureEvidence[ConfigNum]);
   }
-  cprintf("\n");
+  cprintf ("\n");
+
 }
 
 
 
 /*---------------------------------------------------------------------------*/
-int IntegerMatcher::UpdateTablesForFeature(
-    INT_CLASS ClassTemplate,
-    BIT_VECTOR ProtoMask,
-    BIT_VECTOR ConfigMask,
-    int FeatureNum,
-    INT_FEATURE Feature,
-    ScratchEvidence *tables,
-    int Debug) {
+int
+IMUpdateTablesForFeature (INT_CLASS ClassTemplate,
+BIT_VECTOR ProtoMask,
+BIT_VECTOR ConfigMask,
+int FeatureNum,
+INT_FEATURE Feature,
+uinT8 FeatureEvidence[MAX_NUM_CONFIGS],
+int SumOfFeatureEvidence[MAX_NUM_CONFIGS],
+uinT8
+ProtoEvidence[MAX_NUM_PROTOS][MAX_PROTO_INDEX],
+int Debug) {
 /*
- **  Parameters:
- **      ClassTemplate         Prototypes & tables for a class
- **      FeatureNum            Current feature number (for DEBUG only)
- **      Feature               Pointer to a feature struct
- **      tables                Evidence tables
- **      Debug                 Debugger flag: 1=debugger on
- **  Operation:
- **       For the given feature: prune protos, compute evidence,
- **       update Feature Evidence, Proto Evidence, and Sum of Feature
- **       Evidence tables.
- **  Return:
+ **      Parameters:
+ **              ClassTemplate         Prototypes & tables for a class
+ **              FeatureNum            Current feature number (for DEBUG only)
+ **              Feature               Pointer to a feature struct
+ **              FeatureEvidence       Feature Evidence Table
+ **              SumOfFeatureEvidence  Sum of Feature Evidence Table
+ **              ProtoEvidence         Prototype Evidence Table
+ **              Debug                 Debugger flag: 1=debugger on
+ **      Globals:
+ **      Operation:
+ **              For the given feature: prune protos, compute evidence, update Feature Evidence,
+ **              Proto Evidence, and Sum of Feature Evidence tables.
+ **      Return:
+ **      Exceptions: none
+ **      History: Wed Feb 27 14:12:28 MST 1991, RWM, Created.
  */
   register uinT32 ConfigWord;
   register uinT32 ProtoWord;
@@ -760,7 +934,7 @@ int IntegerMatcher::UpdateTablesForFeature(
   register inT32 A3;
   register uinT32 A4;
 
-  tables->ClearFeatureEvidence(ClassTemplate);
+  IMClearFeatureEvidenceTable(FeatureEvidence, ClassTemplate->NumConfigs);
 
   /* Precompute Feature Address offset for Proto Pruning */
   XFeatureAddress = ((Feature->X >> 2) << 1);
@@ -797,25 +971,26 @@ int IntegerMatcher::UpdateTablesForFeature(
           A3 = (((Proto->A * (Feature->X - 128)) << 1)
             - (Proto->B * (Feature->Y - 128)) + (Proto->C << 9));
           M3 =
-            (((inT8) (Feature->Theta - Proto->Angle)) * kIntThetaFudge) << 1;
+            (((inT8) (Feature->Theta - Proto->Angle)) *
+            IntThetaFudge) << 1;
 
           if (A3 < 0)
             A3 = ~A3;
           if (M3 < 0)
             M3 = ~M3;
-          A3 >>= mult_trunc_shift_bits_;
-          M3 >>= mult_trunc_shift_bits_;
-          if (A3 > evidence_mult_mask_)
-            A3 = evidence_mult_mask_;
-          if (M3 > evidence_mult_mask_)
-            M3 = evidence_mult_mask_;
+          A3 >>= MultTruncShiftBits;
+          M3 >>= MultTruncShiftBits;
+          if (A3 > EvidenceMultMask)
+            A3 = EvidenceMultMask;
+          if (M3 > EvidenceMultMask)
+            M3 = EvidenceMultMask;
 
           A4 = (A3 * A3) + (M3 * M3);
-          A4 >>= table_trunc_shift_bits_;
-          if (A4 > evidence_table_mask_)
+          A4 >>= TableTruncShiftBits;
+          if (A4 > EvidenceTableMask)
             Evidence = 0;
           else
-            Evidence = similarity_evidence_table_[A4];
+            Evidence = SimilarityEvidenceTable[A4];
 
           if (PrintFeatureMatchesOn (Debug))
             IMDebugConfiguration (FeatureNum,
@@ -824,13 +999,14 @@ int IntegerMatcher::UpdateTablesForFeature(
 
           ConfigWord &= *ConfigMask;
 
-          UINT8Pointer = tables->feature_evidence_ - 8;
+          UINT8Pointer = FeatureEvidence - 8;
           config_byte = 0;
           while (ConfigWord != 0 || config_byte != 0) {
             while (config_byte == 0) {
               config_byte = ConfigWord & 0xff;
               ConfigWord >>= 8;
               UINT8Pointer += 8;
+              //                                              config_shifts++;
             }
             config_offset = offset_table[config_byte];
             config_byte = next_table[config_byte];
@@ -839,7 +1015,7 @@ int IntegerMatcher::UpdateTablesForFeature(
           }
 
           UINT8Pointer =
-            &(tables->proto_evidence_[ActualProtoNum + proto_offset][0]);
+            &(ProtoEvidence[ActualProtoNum + proto_offset][0]);
           for (ProtoIndex =
             ClassTemplate->ProtoLengths[ActualProtoNum + proto_offset];
           ProtoIndex > 0; ProtoIndex--, UINT8Pointer++) {
@@ -856,13 +1032,11 @@ int IntegerMatcher::UpdateTablesForFeature(
     }
   }
 
-  if (PrintFeatureMatchesOn(Debug)) {
-    IMDebugConfigurationSum(FeatureNum, tables->feature_evidence_,
-                            ClassTemplate->NumConfigs);
-  }
-
-  IntPointer = tables->sum_feature_evidence_;
-  UINT8Pointer = tables->feature_evidence_;
+  if (PrintFeatureMatchesOn (Debug))
+    IMDebugConfigurationSum (FeatureNum, FeatureEvidence,
+      ClassTemplate->NumConfigs);
+  IntPointer = SumOfFeatureEvidence;
+  UINT8Pointer = FeatureEvidence;
   int SumOverConfigs = 0;
   for (ConfigNum = ClassTemplate->NumConfigs; ConfigNum > 0; ConfigNum--) {
     int evidence = *UINT8Pointer++;
@@ -875,13 +1049,14 @@ int IntegerMatcher::UpdateTablesForFeature(
 
 /*---------------------------------------------------------------------------*/
 #ifndef GRAPHICS_DISABLED
-void IntegerMatcher::DebugFeatureProtoError(
-    INT_CLASS ClassTemplate,
-    BIT_VECTOR ProtoMask,
-    BIT_VECTOR ConfigMask,
-    const ScratchEvidence& tables,
-    inT16 NumFeatures,
-    int Debug) {
+void
+IMDebugFeatureProtoError (INT_CLASS ClassTemplate,
+BIT_VECTOR ProtoMask,
+BIT_VECTOR ConfigMask,
+int SumOfFeatureEvidence[MAX_NUM_CONFIGS],
+uinT8
+ProtoEvidence[MAX_NUM_PROTOS][MAX_PROTO_INDEX],
+inT16 NumFeatures, int Debug) {
 /*
  **      Parameters:
  **      Globals:
@@ -891,6 +1066,8 @@ void IntegerMatcher::DebugFeatureProtoError(
  **      Exceptions: none
  **      History: Wed Feb 27 14:12:28 MST 1991, RWM, Created.
  */
+  uinT8 *UINT8Pointer;
+  int *IntPointer;
   FLOAT32 ProtoConfigs[MAX_NUM_CONFIGS];
   int ConfigNum;
   uinT32 ConfigWord;
@@ -898,23 +1075,28 @@ void IntegerMatcher::DebugFeatureProtoError(
   uinT16 ProtoNum;
   uinT8 ProtoWordNum;
   PROTO_SET ProtoSet;
+  int ProtoIndex;
+  int NumProtos;
   uinT16 ActualProtoNum;
+  int Temp;
+  int NumConfigs;
 
-  if (PrintMatchSummaryOn(Debug)) {
-    cprintf("Configuration Mask:\n");
-    for (ConfigNum = 0; ConfigNum < ClassTemplate->NumConfigs; ConfigNum++)
-      cprintf("%1d", (((*ConfigMask) >> ConfigNum) & 1));
-    cprintf("\n");
+  NumProtos = ClassTemplate->NumProtos;
+  NumConfigs = ClassTemplate->NumConfigs;
 
-    cprintf("Feature Error for Configurations:\n");
-    for (ConfigNum = 0; ConfigNum < ClassTemplate->NumConfigs; ConfigNum++) {
-      cprintf(
-          " %5.1f",
-          100.0 * (1.0 -
-          (FLOAT32) tables.sum_feature_evidence_[ConfigNum]
-          / NumFeatures / 256.0));
-    }
-    cprintf("\n\n\n");
+  if (PrintMatchSummaryOn (Debug)) {
+    cprintf ("Configuration Mask:\n");
+    for (ConfigNum = 0; ConfigNum < NumConfigs; ConfigNum++)
+      cprintf ("%1d", (((*ConfigMask) >> ConfigNum) & 1));
+    cprintf ("\n");
+
+    cprintf ("Feature Error for Configurations:\n");
+    for (ConfigNum = 0; ConfigNum < NumConfigs; ConfigNum++)
+      cprintf (" %5.1f",
+        100.0 * (1.0 -
+        (FLOAT32) SumOfFeatureEvidence[ConfigNum] /
+        NumFeatures / 256.0));
+    cprintf ("\n\n\n");
   }
 
   if (PrintMatchSummaryOn (Debug)) {
@@ -927,7 +1109,7 @@ void IntegerMatcher::DebugFeatureProtoError(
         ActualProtoNum = (ProtoSetIndex * PROTOS_PER_PROTO_SET);
         for (ProtoNum = 0;
           ((ProtoNum < (PROTOS_PER_PROTO_SET >> 1))
-          && (ActualProtoNum < ClassTemplate->NumProtos));
+          && (ActualProtoNum < NumProtos));
           ProtoNum++, ActualProtoNum++)
         cprintf ("%1d", (((*ProtoMask) >> ProtoNum) & 1));
         cprintf ("\n");
@@ -936,8 +1118,8 @@ void IntegerMatcher::DebugFeatureProtoError(
     cprintf ("\n");
   }
 
-  for (int i = 0; i < ClassTemplate->NumConfigs; i++)
-    ProtoConfigs[i] = 0;
+  for (ConfigNum = 0; ConfigNum < NumConfigs; ConfigNum++)
+    ProtoConfigs[ConfigNum] = 0;
 
   if (PrintProtoMatchesOn (Debug)) {
     cprintf ("Proto Evidence:\n");
@@ -946,37 +1128,41 @@ void IntegerMatcher::DebugFeatureProtoError(
       ProtoSet = ClassTemplate->ProtoSets[ProtoSetIndex];
       ActualProtoNum = (ProtoSetIndex * PROTOS_PER_PROTO_SET);
       for (ProtoNum = 0;
-           ((ProtoNum < PROTOS_PER_PROTO_SET) &&
-            (ActualProtoNum < ClassTemplate->NumProtos));
-           ProtoNum++, ActualProtoNum++) {
+        ((ProtoNum < PROTOS_PER_PROTO_SET)
+        && (ActualProtoNum < NumProtos));
+      ProtoNum++, ActualProtoNum++) {
         cprintf ("P %3d =", ActualProtoNum);
-        int temp = 0;
-        for (int j = 0; j < ClassTemplate->ProtoLengths[ActualProtoNum]; j++) {
-          uinT8 data = tables.proto_evidence_[ActualProtoNum][j];
-          cprintf(" %d", data);
-          temp += data;
+        Temp = 0;
+        UINT8Pointer = &(ProtoEvidence[ActualProtoNum][0]);
+        for (ProtoIndex = 0;
+          ProtoIndex < ClassTemplate->ProtoLengths[ActualProtoNum];
+        ProtoIndex++, UINT8Pointer++) {
+          cprintf (" %d", *UINT8Pointer);
+          Temp += *UINT8Pointer;
         }
 
-        cprintf(" = %6.4f%%\n",
-                temp / 256.0 / ClassTemplate->ProtoLengths[ActualProtoNum]);
+        cprintf (" = %6.4f%%\n", Temp /
+          256.0 / ClassTemplate->ProtoLengths[ActualProtoNum]);
 
-        ConfigWord = ProtoSet->Protos[ProtoNum].Configs[0];
+        ConfigWord = (ProtoSet->Protos[ProtoNum]).Configs[0];
+        IntPointer = SumOfFeatureEvidence;
         ConfigNum = 0;
         while (ConfigWord) {
-          cprintf ("%5d", ConfigWord & 1 ? temp : 0);
+          cprintf ("%5d", ConfigWord & 1 ? Temp : 0);
           if (ConfigWord & 1)
-            ProtoConfigs[ConfigNum] += temp;
+            ProtoConfigs[ConfigNum] += Temp;
+          IntPointer++;
           ConfigNum++;
           ConfigWord >>= 1;
         }
-        cprintf("\n");
+        cprintf ("\n");
       }
     }
   }
 
   if (PrintMatchSummaryOn (Debug)) {
     cprintf ("Proto Error for Configurations:\n");
-    for (ConfigNum = 0; ConfigNum < ClassTemplate->NumConfigs; ConfigNum++)
+    for (ConfigNum = 0; ConfigNum < NumConfigs; ConfigNum++)
       cprintf (" %5.1f",
         100.0 * (1.0 -
         ProtoConfigs[ConfigNum] /
@@ -986,12 +1172,12 @@ void IntegerMatcher::DebugFeatureProtoError(
 
   if (PrintProtoMatchesOn (Debug)) {
     cprintf ("Proto Sum for Configurations:\n");
-    for (ConfigNum = 0; ConfigNum < ClassTemplate->NumConfigs; ConfigNum++)
+    for (ConfigNum = 0; ConfigNum < NumConfigs; ConfigNum++)
       cprintf (" %4.1f", ProtoConfigs[ConfigNum] / 256.0);
     cprintf ("\n\n");
 
     cprintf ("Proto Length for Configurations:\n");
-    for (ConfigNum = 0; ConfigNum < ClassTemplate->NumConfigs; ConfigNum++)
+    for (ConfigNum = 0; ConfigNum < NumConfigs; ConfigNum++)
       cprintf (" %4.1f",
         (float) ClassTemplate->ConfigLengths[ConfigNum]);
     cprintf ("\n\n");
@@ -1001,41 +1187,63 @@ void IntegerMatcher::DebugFeatureProtoError(
 
 
 /*---------------------------------------------------------------------------*/
-void IntegerMatcher::DisplayProtoDebugInfo(
-    INT_CLASS ClassTemplate,
-    BIT_VECTOR ProtoMask,
-    BIT_VECTOR ConfigMask,
-    const ScratchEvidence& tables,
-    bool SeparateDebugWindows) {
-  uinT16 ProtoNum;
-  uinT16 ActualProtoNum;
+void
+IMDisplayProtoDebugInfo (INT_CLASS ClassTemplate,
+BIT_VECTOR ProtoMask,
+BIT_VECTOR ConfigMask,
+uinT8 ProtoEvidence[MAX_NUM_PROTOS][MAX_PROTO_INDEX],
+int Debug) {
+  register uinT8 *UINT8Pointer;
+  register uinT32 ConfigWord;
+  register uinT16 ProtoNum;
+  register uinT16 ActualProtoNum;
   PROTO_SET ProtoSet;
   int ProtoSetIndex;
+  int ProtoIndex;
+  int NumProtos;
+  register int Temp;
 
-  InitIntMatchWindowIfReqd();
-  if (SeparateDebugWindows) {
-    InitFeatureDisplayWindowIfReqd();
-    InitProtoDisplayWindowIfReqd();
+  extern ScrollView *IntMatchWindow;
+
+  if (IntMatchWindow == NULL) {
+    IntMatchWindow = c_create_window ("IntMatchWindow", 50, 200,
+      520, 520,
+      -130.0, 130.0, -130.0, 130.0);
   }
-
+  NumProtos = ClassTemplate->NumProtos;
 
   for (ProtoSetIndex = 0; ProtoSetIndex < ClassTemplate->NumProtoSets;
-       ProtoSetIndex++) {
+  ProtoSetIndex++) {
     ProtoSet = ClassTemplate->ProtoSets[ProtoSetIndex];
-    ActualProtoNum = ProtoSetIndex * PROTOS_PER_PROTO_SET;
+    ActualProtoNum = (ProtoSetIndex * PROTOS_PER_PROTO_SET);
     for (ProtoNum = 0;
-         ((ProtoNum < PROTOS_PER_PROTO_SET) &&
-          (ActualProtoNum < ClassTemplate->NumProtos));
-         ProtoNum++, ActualProtoNum++) {
+      ((ProtoNum < PROTOS_PER_PROTO_SET)
+    && (ActualProtoNum < NumProtos)); ProtoNum++, ActualProtoNum++) {
       /* Compute Average for Actual Proto */
-      int temp = 0;
-      for (int i = 0; i < ClassTemplate->ProtoLengths[ActualProtoNum]; i++)
-        temp += tables.proto_evidence_[ActualProtoNum][i];
+      Temp = 0;
+      UINT8Pointer = &(ProtoEvidence[ActualProtoNum][0]);
+      for (ProtoIndex = ClassTemplate->ProtoLengths[ActualProtoNum];
+        ProtoIndex > 0; ProtoIndex--, UINT8Pointer++)
+      Temp += *UINT8Pointer;
 
-      temp /= ClassTemplate->ProtoLengths[ActualProtoNum];
+      Temp /= ClassTemplate->ProtoLengths[ActualProtoNum];
 
-      if ((ProtoSet->Protos[ProtoNum]).Configs[0] & (*ConfigMask)) {
-        DisplayIntProto(ClassTemplate, ActualProtoNum, temp / 255.0);
+      ConfigWord = (ProtoSet->Protos[ProtoNum]).Configs[0];
+      ConfigWord &= *ConfigMask;
+      if (ConfigWord) {
+        /* Update display for current proto */
+        if (ClipMatchEvidenceOn (Debug)) {
+          if (Temp < AdaptProtoThresh)
+            DisplayIntProto (ClassTemplate, ActualProtoNum,
+              (Temp / 255.0));
+          else
+            DisplayIntProto (ClassTemplate, ActualProtoNum,
+              (Temp / 255.0));
+        }
+        else {
+          DisplayIntProto (ClassTemplate, ActualProtoNum,
+            (Temp / 255.0));
+        }
       }
     }
   }
@@ -1043,83 +1251,99 @@ void IntegerMatcher::DisplayProtoDebugInfo(
 
 
 /*---------------------------------------------------------------------------*/
-void IntegerMatcher::DisplayFeatureDebugInfo(
-    INT_CLASS ClassTemplate,
-    BIT_VECTOR ProtoMask,
-    BIT_VECTOR ConfigMask,
-    inT16 NumFeatures,
-    INT_FEATURE_ARRAY Features,
-    int AdaptFeatureThreshold,
-    int Debug,
-    bool SeparateDebugWindows) {
-  ScratchEvidence *tables = new ScratchEvidence();
+void IMDisplayFeatureDebugInfo(INT_CLASS ClassTemplate,
+                               BIT_VECTOR ProtoMask,
+                               BIT_VECTOR ConfigMask,
+                               inT16 NumFeatures,
+                               INT_FEATURE_ARRAY Features,
+                               int Debug) {
+  static uinT8 FeatureEvidence[MAX_NUM_CONFIGS];
+  static int SumOfFeatureEvidence[MAX_NUM_CONFIGS];
+  static uinT8 ProtoEvidence[MAX_NUM_PROTOS][MAX_PROTO_INDEX];
+  int Feature;
+  register uinT8 *UINT8Pointer;
+  register int ConfigNum;
+  int NumConfigs;
+  register int Temp;
 
-  tables->Clear(ClassTemplate);
+  IMClearTables(ClassTemplate, SumOfFeatureEvidence, ProtoEvidence);
 
-  InitIntMatchWindowIfReqd();
-  if (SeparateDebugWindows) {
-    InitFeatureDisplayWindowIfReqd();
-    InitProtoDisplayWindowIfReqd();
-  }
-
-  for (int Feature = 0; Feature < NumFeatures; Feature++) {
-    UpdateTablesForFeature(
-        ClassTemplate, ProtoMask, ConfigMask, Feature, &Features[Feature],
-        tables, 0);
+  NumConfigs = ClassTemplate->NumConfigs;
+  for (Feature = 0; Feature < NumFeatures; Feature++) {
+    IMUpdateTablesForFeature (ClassTemplate, ProtoMask, ConfigMask, Feature,
+      &(Features[Feature]), FeatureEvidence,
+      SumOfFeatureEvidence, ProtoEvidence, 0);
 
     /* Find Best Evidence for Current Feature */
-    int best = 0;
-    for (int i = 0; i < ClassTemplate->NumConfigs; i++)
-      if (tables->feature_evidence_[i] > best)
-        best = tables->feature_evidence_[i];
+    Temp = 0;
+    UINT8Pointer = FeatureEvidence;
+    for (ConfigNum = 0; ConfigNum < NumConfigs; ConfigNum++, UINT8Pointer++)
+      if (*UINT8Pointer > Temp)
+        Temp = *UINT8Pointer;
 
     /* Update display for current feature */
-    if (ClipMatchEvidenceOn(Debug)) {
-      if (best < AdaptFeatureThreshold)
-        DisplayIntFeature(&Features[Feature], 0.0);
+    if (ClipMatchEvidenceOn (Debug)) {
+      if (Temp < AdaptFeatureThresh)
+        DisplayIntFeature (&(Features[Feature]), 0.0);
       else
-        DisplayIntFeature(&Features[Feature], 1.0);
-    } else {
-      DisplayIntFeature(&Features[Feature], best / 255.0);
+        DisplayIntFeature (&(Features[Feature]), 1.0);
+    }
+    else {
+      DisplayIntFeature (&(Features[Feature]), (Temp / 255.0));
     }
   }
-
-  delete tables;
 }
 #endif
 
 /*---------------------------------------------------------------------------*/
-// Add sum of Proto Evidences into Sum Of Feature Evidence Array
-void ScratchEvidence::UpdateSumOfProtoEvidences(
-    INT_CLASS ClassTemplate, BIT_VECTOR ConfigMask, inT16 NumFeatures) {
-
-  int *IntPointer;
-  uinT32 ConfigWord;
+void
+IMUpdateSumOfProtoEvidences (INT_CLASS ClassTemplate,
+BIT_VECTOR ConfigMask,
+int SumOfFeatureEvidence[MAX_NUM_CONFIGS],
+uinT8
+ProtoEvidence[MAX_NUM_PROTOS][MAX_PROTO_INDEX],
+inT16 NumFeatures) {
+/*
+ **      Parameters:
+ **      Globals:
+ **      Operation:
+ **              Add sum of Proto Evidences into Sum Of Feature Evidence Array
+ **      Return:
+ **      Exceptions: none
+ **      History: Wed Feb 27 14:12:28 MST 1991, RWM, Created.
+ */
+  register uinT8 *UINT8Pointer;
+  register int *IntPointer;
+  register uinT32 ConfigWord;
   int ProtoSetIndex;
-  uinT16 ProtoNum;
+  register uinT16 ProtoNum;
   PROTO_SET ProtoSet;
+  register int ProtoIndex;
   int NumProtos;
   uinT16 ActualProtoNum;
+  int Temp;
 
   NumProtos = ClassTemplate->NumProtos;
 
   for (ProtoSetIndex = 0; ProtoSetIndex < ClassTemplate->NumProtoSets;
-       ProtoSetIndex++) {
+  ProtoSetIndex++) {
     ProtoSet = ClassTemplate->ProtoSets[ProtoSetIndex];
     ActualProtoNum = (ProtoSetIndex * PROTOS_PER_PROTO_SET);
     for (ProtoNum = 0;
-         ((ProtoNum < PROTOS_PER_PROTO_SET) && (ActualProtoNum < NumProtos));
-         ProtoNum++, ActualProtoNum++) {
-      int temp = 0;
-      for (int i = 0; i < ClassTemplate->ProtoLengths[ActualProtoNum]; i++)
-        temp += proto_evidence_[ActualProtoNum] [i];
+      ((ProtoNum < PROTOS_PER_PROTO_SET)
+    && (ActualProtoNum < NumProtos)); ProtoNum++, ActualProtoNum++) {
+      Temp = 0;
+      UINT8Pointer = &(ProtoEvidence[ActualProtoNum][0]);
+      for (ProtoIndex = ClassTemplate->ProtoLengths[ActualProtoNum];
+        ProtoIndex > 0; ProtoIndex--, UINT8Pointer++)
+      Temp += *UINT8Pointer;
 
-      ConfigWord = ProtoSet->Protos[ProtoNum].Configs[0];
+      ConfigWord = (ProtoSet->Protos[ProtoNum]).Configs[0];
       ConfigWord &= *ConfigMask;
-      IntPointer = sum_feature_evidence_;
+      IntPointer = SumOfFeatureEvidence;
       while (ConfigWord) {
         if (ConfigWord & 1)
-          *IntPointer += temp;
+          *IntPointer += Temp;
         IntPointer++;
         ConfigWord >>= 1;
       }
@@ -1130,25 +1354,40 @@ void ScratchEvidence::UpdateSumOfProtoEvidences(
 
 
 /*---------------------------------------------------------------------------*/
-// Normalize Sum of Proto and Feature Evidence by dividing by the sum of
-// the Feature Lengths and the Proto Lengths for each configuration.
-void ScratchEvidence::NormalizeSums(
-    INT_CLASS ClassTemplate, inT16 NumFeatures, inT32 used_features) {
+void
+IMNormalizeSumOfEvidences (INT_CLASS ClassTemplate,
+int SumOfFeatureEvidence[MAX_NUM_CONFIGS],
+inT16 NumFeatures, inT32 used_features) {
+/*
+ **      Parameters:
+ **      Globals:
+ **      Operation:
+ **              Normalize Sum of Proto and Feature Evidence by dividing by
+ **              the sum of the Feature Lengths and the Proto Lengths for each
+ **              configuration.
+ **      Return:
+ **      Exceptions: none
+ **      History: Wed Feb 27 14:12:28 MST 1991, RWM, Created.
+ */
+  register int *IntPointer;
+  register int ConfigNum;
+  int NumConfigs;
 
-  for (int i = 0; i < ClassTemplate->NumConfigs; i++) {
-    sum_feature_evidence_[i] = (sum_feature_evidence_[i] << 8) /
-        (NumFeatures + ClassTemplate->ConfigLengths[i]);
-  }
+  NumConfigs = ClassTemplate->NumConfigs;
+
+  IntPointer = SumOfFeatureEvidence;
+  for (ConfigNum = 0; ConfigNum < NumConfigs; ConfigNum++, IntPointer++)
+    *IntPointer = (*IntPointer << 8) /
+      (NumFeatures + ClassTemplate->ConfigLengths[ConfigNum]);
 }
 
 
 /*---------------------------------------------------------------------------*/
-int IntegerMatcher::FindBestMatch(
-    INT_CLASS ClassTemplate,
-    const ScratchEvidence &tables,
-    uinT16 BlobLength,
-    uinT8 NormalizationFactor,
-    INT_RESULT Result) {
+int
+IMFindBestMatch (INT_CLASS ClassTemplate,
+int SumOfFeatureEvidence[MAX_NUM_CONFIGS],
+uinT16 BlobLength,
+uinT8 NormalizationFactor, INT_RESULT Result) {
 /*
  **      Parameters:
  **      Globals:
@@ -1160,58 +1399,71 @@ int IntegerMatcher::FindBestMatch(
  **      Exceptions: none
  **      History: Wed Feb 27 14:12:28 MST 1991, RWM, Created.
  */
-  int BestMatch = 0;
-  int Best2Match = 0;
-  assert(ClassTemplate->NumConfigs > 0);
-  Result->Config = 0;
-  Result->Config2 = 0;
+  register int *IntPointer;
+  register int ConfigNum;
+  register int NumConfigs;
+  register int BestMatch;
+  register int Best2Match;
+
+  NumConfigs = ClassTemplate->NumConfigs;
 
   /* Find best match */
-  for (int ConfigNum = 0; ConfigNum < ClassTemplate->NumConfigs; ConfigNum++) {
-    int rating = tables.sum_feature_evidence_[ConfigNum];
-    if (*classify_debug_level_ > 1)
-      cprintf("Config %d, rating=%d\n", ConfigNum, rating);
-    if (rating > BestMatch) {
+  BestMatch = 0;
+  Best2Match = 0;
+  IntPointer = SumOfFeatureEvidence;
+  for (ConfigNum = 0; ConfigNum < NumConfigs; ConfigNum++, IntPointer++) {
+    if (display_ratings > 1)
+      cprintf ("Config %d, rating=%d\n", ConfigNum, *IntPointer);
+    if (*IntPointer > BestMatch) {
       if (BestMatch > 0) {
         Result->Config2 = Result->Config;
         Best2Match = BestMatch;
-      } else {
-        Result->Config2 = ConfigNum;
       }
+      else
+        Result->Config2 = ConfigNum;
       Result->Config = ConfigNum;
-      BestMatch = rating;
-    } else if (rating > Best2Match) {
+      BestMatch = *IntPointer;
+    }
+    else if (*IntPointer > Best2Match) {
       Result->Config2 = ConfigNum;
-      Best2Match = rating;
+      Best2Match = *IntPointer;
     }
   }
 
   /* Compute Certainty Rating */
-  Result->Rating = ((65536.0 - BestMatch) / 65536.0 * BlobLength +
-    local_matcher_multiplier_ * NormalizationFactor / 256.0) /
-    (BlobLength + local_matcher_multiplier_);
+  (*Result).Rating = ((65536.0 - BestMatch) / 65536.0 * BlobLength +
+    LocalMatcherMultiplier * NormalizationFactor / 256.0) /
+    (BlobLength + LocalMatcherMultiplier);
 
   return BestMatch;
 }
 
+
 /*---------------------------------------------------------------------------*/
 #ifndef GRAPHICS_DISABLED
-// Print debug information about the best match for the current class.
-void IntegerMatcher::DebugBestMatch(
-    int BestMatch, INT_RESULT Result, uinT16 BlobLength,
-    uinT8 NormalizationFactor) {
-  cprintf("Rating          = %5.1f%%     Best Config   = %3d\n",
-          100.0 * ((*Result).Rating), (int) ((*Result).Config));
+void IMDebugBestMatch(int BestMatch,
+                      INT_RESULT Result,
+                      uinT16 BlobLength,
+                      uinT8 NormalizationFactor) {
+/*
+ **      Parameters:
+ **      Globals:
+ **      Operation:
+ **              Find the best match for the current class and update the Result
+ **      Return:
+ **      Exceptions: none
+ **      History: Wed Feb 27 14:12:28 MST 1991, RWM, Created.
+ */
+  cprintf ("Rating          = %5.1f%%     Best Config   = %3d\n",
+    100.0 * ((*Result).Rating), (int) ((*Result).Config));
   cprintf
     ("Matcher Error   = %5.1f%%     Blob Length   = %3d     Weight = %4.1f%%\n",
     100.0 * (65536.0 - BestMatch) / 65536.0, (int) BlobLength,
-    100.0 * BlobLength / (BlobLength + local_matcher_multiplier_));
+    100.0 * BlobLength / (BlobLength + LocalMatcherMultiplier));
   cprintf
     ("Char Norm Error = %5.1f%%     Norm Strength = %3d     Weight = %4.1f%%\n",
-    100.0 * NormalizationFactor / 256.0,
-    local_matcher_multiplier_,
-    100.0 * local_matcher_multiplier_ /
-        (BlobLength + local_matcher_multiplier_));
+    100.0 * NormalizationFactor / 256.0, LocalMatcherMultiplier,
+    100.0 * LocalMatcherMultiplier / (BlobLength + LocalMatcherMultiplier));
 }
 #endif
 

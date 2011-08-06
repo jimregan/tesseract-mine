@@ -16,27 +16,18 @@
  ** limitations under the License.
  *
  **********************************************************************/
-
 #include          "mfcpch.h"     //precompiled headers
-
-// Include automatically generated configuration file if running autoconf.
-#ifdef HAVE_CONFIG_H
-#include "config_auto.h"
-#endif
-
 #include          <stdio.h>
 #include          <stdarg.h>
 #include          "strngs.h"
-#include          "params.h"
+#include          "varable.h"
 #include              "debugwin.h"
 //#include                                      "ipeerr.h"
 #include          "tprintf.h"
-#include          "ccutil.h"
 
 #define MAX_MSG_LEN     1024
 
 #define EXTERN
-// Since tprintf is protected by a mutex, these parameters can rmain global.
 DLLSYM STRING_VAR (debug_file, "", "File to send tprintf output to");
 DLLSYM BOOL_VAR (debug_window_on, FALSE,
 "Send tprintf to window unless file set");
@@ -45,7 +36,6 @@ DLLSYM void
 tprintf (                        //Trace printf
 const char *format, ...          //special message
 ) {
-  tesseract::tprintfMutex.Lock();
   va_list args;                  //variable args
   static FILE *debugfp = NULL;   //debug file
                                  //debug window
@@ -86,7 +76,6 @@ const char *format, ...          //special message
       fprintf (stderr, "%s", msg);
     }
   }
-  tesseract::tprintfMutex.Unlock();
 }
 
 

@@ -18,18 +18,52 @@
 #ifndef SPECKLE_H
 #define SPECKLE_H
 
-/*-----------------------------------------------------------------------------
+/**----------------------------------------------------------------------------
           Include Files and Type Defines
------------------------------------------------------------------------------*/
-
+----------------------------------------------------------------------------**/
 #include "baseline.h"
-#include "ratngs.h"
+#include "choices.h"
 
-/*-----------------------------------------------------------------------------
+/**----------------------------------------------------------------------------
+            Macros
+----------------------------------------------------------------------------**/
+/* macro for getting the height of a row of text */
+#define RowHeight(R)	((is_baseline_normalized ())?			\
+			(BASELINE_SCALE):				\
+			((R)->lineheight))
+
+/**----------------------------------------------------------------------------
           Public Function Prototypes
------------------------------------------------------------------------------*/
-void AddLargeSpeckleTo(BLOB_CHOICE_LIST *Choices);
+----------------------------------------------------------------------------**/
+LIST AddLargeSpeckleTo(LIST Choices); 
 
-BOOL8 LargeSpeckle(TBLOB *Blob);
+void InitSpeckleVars(); 
 
+BOOL8 LargeSpeckle(TBLOB *Blob, TEXTROW *Row); 
+
+/*
+#if defined(__STDC__) || defined(__cplusplus)
+# define        _ARGS(s) s
+#else
+# define        _ARGS(s) ()
+#endif*/
+
+/* speckle.c
+LIST AddLargeSpeckleTo
+    _ARGS((LIST Choices));
+
+void InitSpeckleVars
+    _ARGS((void));
+
+BOOL8 LargeSpeckle
+    _ARGS((BLOB *Blob,
+  TEXTROW *Row));
+
+#undef _ARGS
+*/
+/**----------------------------------------------------------------------------
+        Global Data Definitions and Declarations
+----------------------------------------------------------------------------**/
+extern float SmallSpecklePenalty;
+extern float SmallSpeckleCertainty;
 #endif

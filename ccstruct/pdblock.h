@@ -1,8 +1,8 @@
 /**********************************************************************
  * File:        pdblock.h  (Formerly pdblk.h)
  * Description: Page block class definition.
- * Author:      Ray Smith
- * Created:     Thu Mar 14 17:32:01 GMT 1991
+ * Author:					Ray Smith
+ * Created:					Thu Mar 14 17:32:01 GMT 1991
  *
  * (C) Copyright 1991, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,132 +20,121 @@
 #ifndef           PDBLOCK_H
 #define           PDBLOCK_H
 
-#include          "clst.h"
 #include          "img.h"
 #include          "strngs.h"
-#include          "polyblk.h"
+#include          "pageblk.h"
 
 #include          "hpddef.h"     //must be last (handpd.dll)
 
 class DLLSYM PDBLK;              //forward decl
-struct Pix;
 
 CLISTIZEH (PDBLK)
-///page block
-class PDBLK
+class DLLSYM PDBLK               //page block
 {
-  friend class BLOCK_RECT_IT;    //< block iterator
+  friend class BLOCK_RECT_IT;    //block iterator
+
+                                 //block label
+  friend void scan_hpd_blocks(const char *name,
+                              PAGE_BLOCK_LIST *page_blocks,  //head of full pag
+                              inT32 &block_no,               //no of blocks
+                              PDBLK_C_IT *block_it);
+  friend BOOL8 read_vec_file(              //read uscan output
+                             STRING name,  //basename of file
+                             inT32 xsize,  //page size //output list
+                             inT32 ysize,
+                             PDBLK_CLIST *blocks);
+  friend BOOL8 read_pd_file(              //read uscan output
+                            STRING name,  //basename of file
+                            inT32 xsize,  //page size //output list
+                            inT32 ysize,
+                            PDBLK_CLIST *blocks);
 
   public:
-    ///empty constructor
-    PDBLK() {
+    PDBLK() {  //empty constructor
+      hand_block = NULL;
       hand_poly = NULL;
-      index_ = 0;
     }
-    ///simple constructor
-    PDBLK(inT16 xmin,  //< bottom left
+    PDBLK(             //simple constructor
+          inT16 xmin,  //bottom left
           inT16 ymin,
-          inT16 xmax,  //< top right
+          inT16 xmax,  //top right
           inT16 ymax);
 
-    ///set vertex lists
-    ///@param left list of left vertices
-    ///@param right list of right vertices
-    void set_sides(ICOORDELT_LIST *left,
-                   ICOORDELT_LIST *right);
+    void set_sides(                         //set vertex lists
+                   ICOORDELT_LIST *left,    //list of left vertices
+                   ICOORDELT_LIST *right);  //list of right vertices
 
-    ///destructor
-    ~PDBLK () {
-      if (hand_poly) delete hand_poly;
+    ~PDBLK () {                  //destructor
     }
 
+    TEXT_REGION *text_region() {
+      return hand_block;
+    }
     POLY_BLOCK *poly_block() {
       return hand_poly;
     }
-    ///set the poly block
-    void set_poly_block(POLY_BLOCK *blk) {
+    void set_poly_block(  //set the poly block
+                        POLY_BLOCK *blk) {
       hand_poly = blk;
     }
-    ///get box
-    void bounding_box(ICOORD &bottom_left,        //bottom left
+    void bounding_box(                            //get box
+                      ICOORD &bottom_left,        //bottom left
                       ICOORD &top_right) const {  //topright
       bottom_left = box.botleft ();
       top_right = box.topright ();
     }
-    ///get real box
+                                 //get real box
     const TBOX &bounding_box() const {
       return box;
     }
 
-    int index() const {
-      return index_;
-    }
-    void set_index(int value) {
-      index_ = value;
-    }
+    BOOL8 contains(  //is pt inside block
+                   ICOORD pt);
 
-    ///is pt inside block
-    BOOL8 contains(ICOORD pt);
+    void move(                    // reposition block
+              const ICOORD vec);  // by vector
 
-    /// reposition block
-    void move(const ICOORD vec);  // by vector
+    void plot(                 //draw histogram
+              ScrollView* window,   //window to draw in
+              inT32 serial,    //serial number
+              ScrollView::Color colour);  //colour to draw in
 
-    // Returns a binary Pix mask with a 1 pixel for every pixel within the
-    // block. Rotates the coordinate system by rerotation prior to rendering.
-    Pix* render_mask(const FCOORD& rerotation);
-    ///draw histogram
-    ///@param window window to draw in
-    ///@param serial serial number
-    ///@param colour colour to draw in
-    void plot(ScrollView* window,
-              inT32 serial,
-              ScrollView::Color colour);
+    void show(                 //show image
+              IMAGE *image,    //image to show
+              ScrollView* window);  //window to show in
 
-    ///show image
-    ///@param image image to show
-    ///@param window window to show in
-    void show(IMAGE *image,
-              ScrollView* window);
-
-    ///assignment
-    ///@param source from this
-    PDBLK & operator= (const PDBLK & source);
+    PDBLK & operator= (          //assignment
+      const PDBLK & source);     //from this
 
   protected:
-    POLY_BLOCK *hand_poly;       //< wierd as well
-    ICOORDELT_LIST leftside;     //< left side vertices
-    ICOORDELT_LIST rightside;    //< right side vertices
-    TBOX box;                    //< bounding box
-    int index_;                  //< Serial number of this block.
+    TEXT_REGION * hand_block;    //if it exists
+    POLY_BLOCK *hand_poly;       //wierd as well
+    ICOORDELT_LIST leftside;     //left side vertices
+    ICOORDELT_LIST rightside;    //right side vertices
+    TBOX box;                     //bounding box
 };
 
 class DLLSYM BLOCK_RECT_IT       //rectangle iterator
 {
   public:
-    ///constructor
-    ///@param blkptr block to iterate
-    BLOCK_RECT_IT(PDBLK *blkptr);
+    BLOCK_RECT_IT(                 //constructor
+                  PDBLK *blkptr);  //block to iterate
 
-    ///start (new) block
-    void set_to_block (
+                                 //start (new) block
+    NEWDELETE2 (BLOCK_RECT_IT) void set_to_block (
       PDBLK * blkptr);           //block to iterate
 
-    ///start iteration
-    void start_block();
+    void start_block();  //start iteration
 
-    ///next rectangle
-    void forward();
+    void forward();  //next rectangle
 
-    ///test end
-    BOOL8 cycled_rects() {
+    BOOL8 cycled_rects() {  //test end
       return left_it.cycled_list () && right_it.cycled_list ();
     }
 
-    ///current rectangle
-    ///@param bleft bottom left
-    ///@param tright top right
-    void bounding_box(ICOORD &bleft,
-                      ICOORD &tright) {
+    void bounding_box(                   //current rectangle
+                      ICOORD &bleft,     //bottom left
+                      ICOORD &tright) {  //top right
                                  //bottom left
       bleft = ICOORD (left_it.data ()->x (), ymin);
                                  //top right
@@ -153,43 +142,40 @@ class DLLSYM BLOCK_RECT_IT       //rectangle iterator
     }
 
   private:
-    inT16 ymin;                  //< bottom of rectangle
-    inT16 ymax;                  //< top of rectangle
-    PDBLK *block;                //< block to iterate
-    ICOORDELT_IT left_it;        //< boundary iterators
+    inT16 ymin;                  //bottom of rectangle
+    inT16 ymax;                  //top of rectangle
+    PDBLK *block;                //block to iterate
+    ICOORDELT_IT left_it;        //boundary iterators
     ICOORDELT_IT right_it;
 };
 
-///rectangle iterator
-class DLLSYM BLOCK_LINE_IT
+class DLLSYM BLOCK_LINE_IT       //rectangle iterator
 {
   public:
-    ///constructor
-    ///@param blkptr from block
-    BLOCK_LINE_IT (PDBLK * blkptr)
+    BLOCK_LINE_IT (              //constructor
+      PDBLK * blkptr)            //from block
     :rect_it (blkptr) {
       block = blkptr;            //remember block
     }
 
-    ///start (new) block
-      ///@param blkptr block to start
-    void set_to_block (PDBLK * blkptr) {
+                                 //start (new) block
+    NEWDELETE2 (BLOCK_LINE_IT) void set_to_block (
+    PDBLK * blkptr) {            //block to start
       block = blkptr;            //remember block
                                  //set iterator
       rect_it.set_to_block (blkptr);
     }
 
-    ///get a line
-    ///@param y line to get
-    ///@param xext output extent
-    inT16 get_line(inT16 y,
-                   inT16 &xext);
+    inT16 get_line(               //get a line
+                   inT16 y,       //line to get
+                   inT16 &xext);  //output extent
 
   private:
-    PDBLK * block;               //< block to iterate
-    BLOCK_RECT_IT rect_it;       //< rectangle iterator
+    PDBLK * block;               //block to iterate
+    BLOCK_RECT_IT rect_it;       //rectangle iterator
 };
 
-int decreasing_top_order(const void *row1,
+int decreasing_top_order(  //
+                         const void *row1,
                          const void *row2);
 #endif

@@ -40,7 +40,7 @@ Import original HP distribution
 #include <string.h>
 #include <stdlib.h>
 
-#include "host.h"
+#include "general.h"
 #include "tprintf.h"
 
 /*----------------------------------------------------------------------
@@ -64,6 +64,7 @@ Import original HP distribution
 
 //typedef int (*int_proc)               (void);
 typedef void (*void_proc) (...);
+typedef char *(*char_proc) _ARGS ((...));
 typedef void *(*void_star_proc) _ARGS ((...));
 
 typedef int (*int_void) (void);
@@ -71,9 +72,34 @@ typedef void (*void_void) (void);
 typedef int (*int_compare) (void *, void *);
 typedef void (*void_dest) (void *);
 
+extern void_proc deallocate;
+extern char_proc allocate;
+
 /*----------------------------------------------------------------------
                      M a c r o s
 ----------------------------------------------------------------------*/
+/**********************************************************************
+ * min
+ *
+ * Minimum of two values
+ **********************************************************************/
+
+#ifndef min
+#define min(x,y) \
+  ((x) < (y) ? (x) : (y))
+#endif
+
+/**********************************************************************
+ * max
+ *
+ * Maximum of two values
+ **********************************************************************/
+
+#ifndef max
+#define max(x,y) \
+  ((y) < (x) ? (x) : (y))
+#endif
+
 /**********************************************************************
  * new_line
  *
@@ -99,7 +125,7 @@ typedef void (*void_dest) (void *);
  * to it and return the result.
  **********************************************************************/
 
-#define strfree(s)  (free_string(s))
+#define strfree(s)  ((*deallocate) (s))
 
 /**********************************************************************
  * strsave
@@ -110,7 +136,7 @@ typedef void (*void_dest) (void *);
 
 #define strsave(s)    \
   ((s) != NULL ?  \
-   ((char*) strcpy (alloc_string(strlen(s)+1), s))  :  \
+   ((char*) strcpy ((*allocate) (strlen(s)+1), s))  :  \
    (NULL))
 
 /*----------------------------------------------------------------------
@@ -119,8 +145,6 @@ typedef void (*void_dest) (void *);
 long long_rand(long limit);
 
 FILE *open_file(const char *filename, const char *mode);
-
-bool exists_file(const char *filename);
 
 /* util.c
 long long_rand
@@ -132,5 +156,4 @@ FILE *open_file
 
 #undef _ARGS
 */
-#include "cutil_class.h"
 #endif

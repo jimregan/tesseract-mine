@@ -15,17 +15,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if [ $# -ne 1 -a $# -ne 2 ]
+if [ $# -ne 1 ]
 then
-  echo "Usage:$0 pagesfile [-zoning]"
+  echo "Usage:$0 pagesfile"
   exit 1
 fi
-if [ ! -d api ]
+if [ ! -d ccmain ]
 then
   echo "Run $0 from the tesseract-ocr root directory!"
   exit 1
 fi
-if [ ! -r api/tesseract ]
+if [ ! -r ccmain/tesseract ]
 then
   if [ ! -r tesseract.exe ]
   then
@@ -35,24 +35,17 @@ then
     tess="./tesseract.exe"
   fi
 else
-  tess="time -f %U -o times.txt api/tesseract"
+  tess="ccmain/tesseract"
   export TESSDATA_PREFIX=$PWD/
 fi
 
 pages=$1
+
 imdir=${pages%/pages}
 setname=${imdir##*/}
-if [ $# -eq 2 -a "$2" = "-zoning" ]
-then
-  config=unlv.auto
-  resdir=testing/results/zoning.$setname
-else
-  config=unlv
-  resdir=testing/results/$setname
-fi
-echo -e "Testing on set $setname in directory $imdir to $resdir\n"
+resdir=testing/results/$setname
+echo "Testing on set $setname in directory $imdir to $resdir"
 mkdir -p $resdir
-rm -f testing/reports/$setname.times
 while read page dir
 do
   # A pages file may be a list of files with subdirs or maybe just
@@ -64,15 +57,5 @@ do
      srcdir="$imdir"
   fi
 #  echo "$srcdir/$page.tif"
-  $tess $srcdir/$page.tif $resdir/$page nobatch $config 2>&1 |grep -v "OCR Engine"
-  if [ -r times.txt ]
-  then
-    read t <times.txt
-    echo "$page $t" >>testing/reports/$setname.times
-    echo -e "\033M$page $t"
-    if [ "$t" = "Command terminated by signal 2" ]
-    then
-      exit 0
-    fi
-  fi
+  $tess $srcdir/$page.tif $resdir/$page nobatch unlv
 done <$pages

@@ -18,12 +18,11 @@
 /**----------------------------------------------------------------------------
           Include Files and Type Defines
 ----------------------------------------------------------------------------**/
-#include "mf.h"
-
-#include "featdefs.h"
 #include "mfdefs.h"
+#include "variables.h"
+#include "mf.h"
+#include "fxdefs.h"
 #include "mfx.h"
-
 #include <math.h>
 
 /**----------------------------------------------------------------------------
@@ -33,11 +32,11 @@
               Private Code
 ----------------------------------------------------------------------------**/
 /*---------------------------------------------------------------------------*/
-FEATURE_SET ExtractMicros(TBLOB *Blob, const DENORM& denorm) {
+FEATURE_SET ExtractMicros(TBLOB *Blob, LINE_STATS *LineStats) {
 /*
  **	Parameters:
  **		Blob		blob to extract micro-features from
- **		denorm  control parameter to feature extractor.
+ **		LineStats	statistics on text row blob is in
  **	Globals: none
  **	Operation: Call the old micro-feature extractor and then copy
  **		the features into the new format.  Then deallocate the
@@ -52,9 +51,7 @@ FEATURE_SET ExtractMicros(TBLOB *Blob, const DENORM& denorm) {
   FEATURE Feature;
   MICROFEATURE OldFeature;
 
-  OldFeatures = (MICROFEATURES)BlobMicroFeatures(Blob, denorm);
-  if (OldFeatures == NULL)
-    return NULL;
+  OldFeatures = (MICROFEATURES) BlobMicroFeatures (Blob, LineStats);
   NumFeatures = count (OldFeatures);
   FeatureSet = NewFeatureSet (NumFeatures);
 
@@ -67,17 +64,12 @@ FEATURE_SET ExtractMicros(TBLOB *Blob, const DENORM& denorm) {
     Feature->Params[MFYPosition] = OldFeature[YPOSITION];
     Feature->Params[MFLength] = OldFeature[MFLENGTH];
 
-    // Bulge features are deprecated and should not be used.  Set to 0.
+    // Bulge features should not be used
+    // anymore and are therefore set to 0.
+//     ParamOf (Feature, MFBulge1) = FirstBulgeOf (OldFeature);
+//     ParamOf (Feature, MFBulge2) = SecondBulgeOf (OldFeature);
     Feature->Params[MFBulge1] = 0.0f;
     Feature->Params[MFBulge2] = 0.0f;
-
-#ifndef WIN32
-    // Assert that feature parameters are well defined.
-    int i;
-    for (i = 0; i < Feature->Type->NumParams; i++) {
-      assert (!isnan(Feature->Params[i]));
-    }
-#endif
 
     AddFeature(FeatureSet, Feature);
   }
@@ -85,3 +77,30 @@ FEATURE_SET ExtractMicros(TBLOB *Blob, const DENORM& denorm) {
   return (FeatureSet);
 
 }                                /* ExtractMicros */
+
+
+/*---------------------------------------------------------------------------*/
+void InitMicroFXVars() {
+/*
+ **	Parameters: none
+ **	Globals:
+ **		ExtraPenaltyMagnitude	controls for adjusting extra penalty
+ **		ExtraPenaltyWeight
+ **		ExtraPenaltyOrder
+ **	Operation: Initialize the microfeature extractor variables that can
+ **		be tuned without recompiling.
+ **	Return: none
+ **	Exceptions: none
+ **	History: Thu May 24 10:50:46 1990, DSJ, Created.
+ */
+  /*
+     float_variable (ExtraPenaltyMagnitude, "MFExtraPenaltyMag",
+     EXTRA_PENALTY_MAGNITUDE);
+     float_variable (ExtraPenaltyWeight, "MFExtraPenaltyWeight",
+     EXTRA_PENALTY_WEIGHT);
+     float_variable (ExtraPenaltyOrder, "MFExtraPenaltyOrder",
+     EXTRA_PENALTY_ORDER);
+   */
+  InitMicroFxVars();
+
+}                                /* InitMicroFXVars */

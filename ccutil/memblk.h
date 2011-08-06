@@ -20,7 +20,7 @@
 #ifndef           MEMBLK_H
 #define           MEMBLK_H
 
-#include          "params.h"
+#include          "varable.h"
 
 #define MAXBLOCKS     16         /*max allowed to grab */
 #define MAX_STRUCTS     20       //no of units maintained

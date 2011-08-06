@@ -28,14 +28,11 @@
 #include "plotseg.h"
 #include "callcpp.h"
 #include "scrollview.h"
+#include "tessclas.h"
 #include "blobs.h"
+#include "debug.h"
 #include "const.h"
 #include <math.h>
-
-// Include automatically generated configuration file if running autoconf.
-#ifdef HAVE_CONFIG_H
-#include "config_auto.h"
-#endif
 
 #ifndef GRAPHICS_DISABLED
 
@@ -44,7 +41,8 @@
 ----------------------------------------------------------------------*/
 ScrollView *segm_window = NULL;
 
-INT_VAR(wordrec_display_segmentations, 0, "Display Segmentations");
+make_int_var (display_segmentations, 0, make_display_seg,
+9, 2, toggle_segmentations, "Display Segmentations");
 
 /*----------------------------------------------------------------------
               F u n c t i o n s
@@ -69,6 +67,17 @@ void display_segmentation(TBLOB *chunks, SEARCH_STATE segmentation) {
   c_make_current(segm_window);
 }
 
+
+/**********************************************************************
+ * init_plotseg
+ *
+ * Intialize the plotseg control variables.
+ **********************************************************************/
+void init_plotseg() {
+  make_display_seg();
+}
+
+
 /**********************************************************************
  * render_segmentation
  *
@@ -89,7 +98,7 @@ void render_segmentation(ScrollView *window,
   // Find bounding box.
   blobs_bounding_box(chunks, &topleft, &botright);
 
-  for (blob = chunks; blob != NULL; blob = blob->next) {
+  iterate_blobs(blob, chunks) {
 
     if (chunks_left-- == 0) {
       color = color_list[++char_num % NUM_COLORS];

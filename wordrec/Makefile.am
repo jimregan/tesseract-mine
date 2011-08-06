@@ -6,19 +6,18 @@ AM_CPPFLAGS = \
     -I$(top_srcdir)/viewer
 
 include_HEADERS = \
-    associate.h bestfirst.h chop.h \
-    chopper.h closed.h drawfx.h findseam.h gradechop.h \
-    language_model.h makechop.h matchtab.h measure.h \
-    olutil.h outlines.h pieces.h plotedges.h \
-    plotseg.h render.h tally.h \
-    wordclass.h wordrec.h
+    associate.h badwords.h bestfirst.h charsample.h chop.h \
+    chopper.h closed.h djmenus.h drawfx.h findseam.h gradechop.h \
+    heuristic.h makechop.h matchtab.h matrix.h measure.h metrics.h \
+    mfvars.h msmenus.h olutil.h outlines.h pieces.h plotedges.h \
+    plotseg.h render.h seam.h split.h tally.h tessinit.h tface.h \
+    wordclass.h
 
-lib_LTLIBRARIES = libtesseract_wordrec.la
-libtesseract_wordrec_la_SOURCES = \
-    associate.cpp bestfirst.cpp chop.cpp chopper.cpp \
-    closed.cpp drawfx.cpp findseam.cpp gradechop.cpp \
-    heuristic.cpp language_model.cpp makechop.cpp matchtab.cpp \
-    olutil.cpp outlines.cpp pieces.cpp \
-    plotedges.cpp plotseg.cpp render.cpp segsearch.cpp \
-    tally.cpp tface.cpp wordclass.cpp wordrec.cpp
-libtesseract_wordrec_la_LDFLAGS = -version-info $(GENERIC_LIBRARY_VERSION)
+lib_LIBRARIES = libtesseract_wordrec.a
+libtesseract_wordrec_a_SOURCES = \
+    associate.cpp badwords.cpp bestfirst.cpp chop.cpp chopper.cpp \
+    closed.cpp djmenus.cpp drawfx.cpp findseam.cpp gradechop.cpp \
+    heuristic.cpp makechop.cpp matchtab.cpp matrix.cpp metrics.cpp \
+    mfvars.cpp msmenus.cpp olutil.cpp outlines.cpp pieces.cpp \
+    plotedges.cpp plotseg.cpp render.cpp seam.cpp split.cpp \
+    tally.cpp tessinit.cpp tface.cpp wordclass.cpp

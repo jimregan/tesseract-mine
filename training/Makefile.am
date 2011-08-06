@@ -7,75 +7,48 @@ AM_CPPFLAGS = \
     -I$(top_srcdir)/wordrec -I$(top_srcdir)/cutil \
     -I$(top_srcdir)/textord
 
+EXTRA_DIST = training.cpp unicharset_extractor.dsp wordlist2dawg.dsp \
+    cntraining.dsp mftraining.dsp \
+    unicharset_extractor.vcproj wordlist2dawg.vcproj \
+    cntraining.vcproj mftraining.vcproj
+
 include_HEADERS = \
-    commontraining.h mergenf.h tessopt.h
+    mergenf.h name2char.h training.h
 
-lib_LTLIBRARIES = libtesseract_training.la libtesseract_tessopt.la
-libtesseract_training_la_SOURCES = \
-    commontraining.cpp
-libtesseract_tessopt_la_SOURCES = \
-    tessopt.cpp
+lib_LIBRARIES = libtesseract_training.a
+libtesseract_training_a_SOURCES = \
+    name2char.cpp
 
-libtesseract_training_la_LDFLAGS = -version-info $(GENERIC_LIBRARY_VERSION)
-
-libtesseract_tessopt_la_LDFLAGS = -version-info $(GENERIC_LIBRARY_VERSION)
-
-bin_PROGRAMS = cntraining combine_tessdata mftraining unicharset_extractor wordlist2dawg
-combine_tessdata_SOURCES = combine_tessdata.cpp
-combine_tessdata_LDADD = \
-    ../ccutil/libtesseract_ccutil.la
-
-cntraining_SOURCES = cntraining.cpp
+bin_PROGRAMS = cntraining mftraining unicharset_extractor wordlist2dawg
+cntraining_SOURCES = cnTraining.cpp
 cntraining_LDADD = \
-    libtesseract_training.la \
-    libtesseract_tessopt.la \
-    ../textord/libtesseract_textord.la \
-    ../classify/libtesseract_classify.la \
-    ../dict/libtesseract_dict.la \
-    ../ccstruct/libtesseract_ccstruct.la \
-    ../image/libtesseract_image.la \
-    ../cutil/libtesseract_cutil.la \
-    ../viewer/libtesseract_viewer.la \
-    ../ccmain/libtesseract_main.la \
-    ../cube/libtesseract_cube.la \
-    ../neural_networks/runtime/libtesseract_neural.la \
-    ../wordrec/libtesseract_wordrec.la \
-    ../ccutil/libtesseract_ccutil.la
-
-mftraining_SOURCES = mftraining.cpp mergenf.cpp
+    libtesseract_training.a \
+    ../textord/libtesseract_textord.a \
+    ../classify/libtesseract_classify.a \
+    ../dict/libtesseract_dict.a \
+    ../image/libtesseract_image.a \
+    ../cutil/libtesseract_cutil.a \
+    ../ccstruct/libtesseract_ccstruct.a \
+    ../viewer/libtesseract_viewer.a \
+    ../ccutil/libtesseract_ccutil.a
+mftraining_SOURCES = mfTraining.cpp mergenf.cpp
 mftraining_LDADD = \
-    libtesseract_training.la \
-    libtesseract_tessopt.la \
-    ../textord/libtesseract_textord.la \
-    ../classify/libtesseract_classify.la \
-    ../dict/libtesseract_dict.la \
-    ../ccstruct/libtesseract_ccstruct.la \
-    ../image/libtesseract_image.la \
-    ../cutil/libtesseract_cutil.la \
-    ../viewer/libtesseract_viewer.la \
-    ../ccmain/libtesseract_main.la \
-    ../cube/libtesseract_cube.la \
-    ../neural_networks/runtime/libtesseract_neural.la \
-    ../wordrec/libtesseract_wordrec.la \
-    ../ccutil/libtesseract_ccutil.la
-
+    libtesseract_training.a \
+    ../textord/libtesseract_textord.a \
+    ../classify/libtesseract_classify.a \
+    ../dict/libtesseract_dict.a \
+    ../image/libtesseract_image.a \
+    ../cutil/libtesseract_cutil.a \
+    ../ccstruct/libtesseract_ccstruct.a \
+    ../viewer/libtesseract_viewer.a \
+    ../ccutil/libtesseract_ccutil.a
 unicharset_extractor_SOURCES = unicharset_extractor.cpp
 unicharset_extractor_LDADD = \
-    libtesseract_tessopt.la \
-     ../ccutil/libtesseract_ccutil.la
-
+    ../ccutil/libtesseract_ccutil.a
 wordlist2dawg_SOURCES = wordlist2dawg.cpp
 wordlist2dawg_LDADD = \
-    libtesseract_tessopt.la \
-    ../classify/libtesseract_classify.la \
-    ../dict/libtesseract_dict.la \
-    ../ccstruct/libtesseract_ccstruct.la \
-    ../image/libtesseract_image.la \
-    ../cutil/libtesseract_cutil.la \
-    ../viewer/libtesseract_viewer.la \
-    ../ccmain/libtesseract_main.la \
-    ../cube/libtesseract_cube.la \
-    ../neural_networks/runtime/libtesseract_neural.la \
-    ../wordrec/libtesseract_wordrec.la \
-    ../textord/libtesseract_textord.la \
-    ../ccutil/libtesseract_ccutil.la
+    ../dict/libtesseract_dict.a \
+    ../cutil/libtesseract_cutil.a \
+    ../ccstruct/libtesseract_ccstruct.a \
+    ../viewer/libtesseract_viewer.a \
+    ../ccutil/libtesseract_ccutil.a

@@ -19,34 +19,33 @@
           Include Files and Type Defines
 ----------------------------------------------------------------------------**/
 #include "normmatch.h"
-
-#include <stdio.h>
-#include <math.h>
-
-#include "classify.h"
 #include "clusttool.h"
+#include "normfeat.h"
+#include "debug.h"
 #include "const.h"
 #include "efio.h"
 #include "emalloc.h"
 #include "globals.h"
-#include "helpers.h"
-#include "normfeat.h"
 #include "scanutils.h"
-#include "unicharset.h"
-#include "params.h"
 
-struct NORM_PROTOS
+#include <stdio.h>
+#include <math.h>
+
+/* define default filenames for training data */
+#define NORM_PROTO_FILE   "normproto"
+
+typedef struct
 {
   int NumParams;
   PARAM_DESC *ParamDesc;
   LIST* Protos;
   int NumProtos;
-};
+} NORM_PROTOS;
 
 /**----------------------------------------------------------------------------
           Private Function Prototypes
 ----------------------------------------------------------------------------**/
-double NormEvidenceOf(register double NormAdj);
+FLOAT32 NormEvidenceOf(register FLOAT32 NormAdj);
 
 void PrintNormMatch(FILE *File,
                     int NumParams,
@@ -56,22 +55,24 @@ void PrintNormMatch(FILE *File,
 NORM_PROTOS *ReadNormProtos(FILE *File);
 
 /**----------------------------------------------------------------------------
-        Variables
+        Global Data Definitions and Declarations
 ----------------------------------------------------------------------------**/
+/* global data structure to hold char normalization protos */
+static NORM_PROTOS *NormProtos;
+
+/* name of file containing char normalization protos */
+static const char *NormProtoFile = NORM_PROTO_FILE;
 
 /* control knobs used to control the normalization adjustment process */
-double_VAR(classify_norm_adj_midpoint, 32.0, "Norm adjust midpoint ...");
-double_VAR(classify_norm_adj_curl, 2.0, "Norm adjust curl ...");
-// Weight of width variance against height and vertical position.
-const double kWidthErrorWeighting = 0.125;
-
+make_float_var (NormAdjMidpoint, 32.0, MakeNormAdjMidpoint,
+15, 16, SetNormAdjMidpoint, "Norm adjust midpoint ...")
+make_float_var (NormAdjCurl, 2.0, MakeNormAdjCurl,
+15, 17, SetNormAdjCurl, "Norm adjust curl ...")
 /**----------------------------------------------------------------------------
               Public Code
 ----------------------------------------------------------------------------**/
 /*---------------------------------------------------------------------------*/
-namespace tesseract {
-FLOAT32 Classify::ComputeNormMatch(CLASS_ID ClassId, FEATURE Feature,
-                                   BOOL8 DebugMatch) {
+FLOAT32 ComputeNormMatch(CLASS_ID ClassId, FEATURE Feature, BOOL8 DebugMatch) {
 /*
  **	Parameters:
  **		ClassId		id of class to match against
@@ -120,11 +121,6 @@ FLOAT32 Classify::ComputeNormMatch(CLASS_ID ClassId, FEATURE Feature,
     Match = Delta * Delta * Proto->Weight.Elliptical[CharNormY];
     Delta = Feature->Params[CharNormRx] - Proto->Mean[CharNormRx];
     Match += Delta * Delta * Proto->Weight.Elliptical[CharNormRx];
-    // Ry is width! See intfx.cpp.
-    Delta = Feature->Params[CharNormRy] - Proto->Mean[CharNormRy];
-    Delta = Delta * Delta * Proto->Weight.Elliptical[CharNormRy];
-    Delta *= kWidthErrorWeighting;
-    Match += Delta;
 
     if (Match < BestMatch)
       BestMatch = Match;
@@ -143,7 +139,32 @@ FLOAT32 Classify::ComputeNormMatch(CLASS_ID ClassId, FEATURE Feature,
   return (1.0 - NormEvidenceOf (BestMatch));
 }                                /* ComputeNormMatch */
 
-void Classify::FreeNormProtos() {
+
+/*---------------------------------------------------------------------------*/
+void GetNormProtos() {
+/*
+ **	Parameters: none
+ **	Globals:
+ **		NormProtoFile	name of file containing normalization protos
+ **		NormProtos	global data structure to hold protos
+ **	Operation: This routine reads in a set of character normalization
+ **		protos from NormProtoFile and places them into NormProtos.
+ **	Return: none
+ **	Exceptions: none
+ **	History: Wed Dec 19 16:24:25 1990, DSJ, Created.
+ */
+  FILE *File;
+  STRING name;
+
+  name = language_data_path_prefix;
+  name += NormProtoFile;
+  File = Efopen (name.string(), "r");
+  NormProtos = ReadNormProtos (File);
+  fclose(File);
+
+}                                /* GetNormProtos */
+
+void FreeNormProtos() {
   if (NormProtos != NULL) {
     for (int i = 0; i < NormProtos->NumProtos; i++)
       FreeProtoList(&NormProtos->Protos[i]);
@@ -153,7 +174,28 @@ void Classify::FreeNormProtos() {
     NormProtos = NULL;
   }
 }
-}  // namespace tesseract
+
+/*---------------------------------------------------------------------------*/
+void InitNormProtoVars() {
+/*
+ **	Parameters: none
+ **	Globals:
+ **		NormProtoFile		filename for normalization protos
+ **	Operation: Initialize the control variables for the normalization
+ **				matcher.
+ **	Return: none
+ **	Exceptions: none
+ **	History: Mon Nov  5 17:22:10 1990, DSJ, Created.
+ */
+  VALUE dummy;
+
+  string_variable (NormProtoFile, "NormProtoFile", NORM_PROTO_FILE);
+
+  MakeNormAdjMidpoint();
+  MakeNormAdjCurl();
+
+}                                /* InitNormProtoVars */
+
 
 /**----------------------------------------------------------------------------
               Private Code
@@ -165,15 +207,15 @@ void Classify::FreeNormProtos() {
  * normalization adjustment.  The equation that represents the transform is:
  *       1 / (1 + (NormAdj / midpoint) ^ curl)
  **********************************************************************/
-double NormEvidenceOf(register double NormAdj) {
-  NormAdj /= classify_norm_adj_midpoint;
+FLOAT32 NormEvidenceOf(register FLOAT32 NormAdj) {
+  NormAdj /= NormAdjMidpoint;
 
-  if (classify_norm_adj_curl == 3)
+  if (NormAdjCurl == 3)
     NormAdj = NormAdj * NormAdj * NormAdj;
-  else if (classify_norm_adj_curl == 2)
+  else if (NormAdjCurl == 2)
     NormAdj = NormAdj * NormAdj;
   else
-    NormAdj = pow (NormAdj, classify_norm_adj_curl);
+    NormAdj = pow (NormAdj, NormAdjCurl);
   return (1.0 / (1.0 + NormAdj));
 }
 
@@ -200,8 +242,8 @@ void PrintNormMatch(FILE *File,
   FLOAT32 TotalMatch;
 
   for (i = 0, TotalMatch = 0.0; i < NumParams; i++) {
-    ParamMatch = (Feature->Params[i] - Mean(Proto, i)) /
-      StandardDeviation(Proto, i);
+    ParamMatch = (Feature->Params[i] - Mean (Proto, i)) /
+      StandardDeviation (Proto, i);
 
     fprintf (File, " %6.1f", ParamMatch);
 
@@ -215,8 +257,7 @@ void PrintNormMatch(FILE *File,
 
 
 /*---------------------------------------------------------------------------*/
-namespace tesseract {
-NORM_PROTOS *Classify::ReadNormProtos(FILE *File, inT64 end_offset) {
+NORM_PROTOS *ReadNormProtos(FILE *File) {
 /*
  **	Parameters:
  **		File	open text file to read normalization protos from
@@ -240,15 +281,14 @@ NORM_PROTOS *Classify::ReadNormProtos(FILE *File, inT64 end_offset) {
   NormProtos->NumProtos = unicharset.size();
   NormProtos->Protos = (LIST *) Emalloc (NormProtos->NumProtos * sizeof(LIST));
   for (i = 0; i < NormProtos->NumProtos; i++)
-    NormProtos->Protos[i] = NIL_LIST;
+    NormProtos->Protos[i] = NIL;
 
   /* read file header and save in data structure */
   NormProtos->NumParams = ReadSampleSize (File);
   NormProtos->ParamDesc = ReadParamDesc (File, NormProtos->NumParams);
 
   /* read protos for each class into a separate list */
-  while ((end_offset < 0 || ftell(File) < end_offset) &&
-         fscanf(File, "%s %d", unichar, &NumProtos) == 2) {
+  while (fscanf (File, "%s %d", unichar, &NumProtos) == 2) {
     if (unicharset.contains_unichar(unichar)) {
       unichar_id = unicharset.unichar_to_id(unichar);
       Protos = NormProtos->Protos[unichar_id];
@@ -258,8 +298,8 @@ NORM_PROTOS *Classify::ReadNormProtos(FILE *File, inT64 end_offset) {
       NormProtos->Protos[unichar_id] = Protos;
     } else
       cprintf("Error: unichar %s in normproto file is not in unichar set.\n");
-    SkipNewline(File);
   }
+
   return (NormProtos);
+
 }                                /* ReadNormProtos */
-}  // namespace tesseract

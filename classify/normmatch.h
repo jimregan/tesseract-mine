@@ -22,16 +22,17 @@
           Include Files and Type Defines
 ----------------------------------------------------------------------------**/
 #include "matchdefs.h"
+//#include "cluster.h"
 #include "ocrfeatures.h"
-#include "params.h"
 
 /**----------------------------------------------------------------------------
-        Variables
+          Public Function Prototypes
 ----------------------------------------------------------------------------**/
+FLOAT32 ComputeNormMatch(CLASS_ID ClassId, FEATURE Feature, BOOL8 DebugMatch);
 
-/* control knobs used to control the normalization adjustment process */
-extern double_VAR_H(classify_norm_adj_midpoint, 32.0,
-                    "Norm adjust midpoint ...");
-extern double_VAR_H(classify_norm_adj_curl, 2.0, "Norm adjust curl ...");
+void GetNormProtos();
+void FreeNormProtos();
+
+void InitNormProtoVars();
 
 #endif

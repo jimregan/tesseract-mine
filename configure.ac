@@ -7,19 +7,18 @@
 # ----------------------------------------
 
 AC_PREREQ(2.50)
-AC_INIT([tesseract], [3.01], [theraysmith@gmail.com])
-AC_CONFIG_MACRO_DIR([m4])
+AC_INIT(tesseract, 2.04, theraysmith@gmail.com)
 AC_REVISION($Id: configure.ac,v 1.4 2007/02/02 22:38:17 theraysmith Exp $)
 AC_CONFIG_AUX_DIR(config)
-AC_CONFIG_SRCDIR(api/tesseractmain.cpp)
+AC_CONFIG_SRCDIR(ccmain/tesseractmain.cpp)
 AC_PREFIX_DEFAULT(/usr/local)
 AC_CANONICAL_HOST
 
 # Define date of package, etc. Could be useful in auto-generated
 # documentation.
 # TODO(luc) Generate good documentation using doxygen or equivalent
-PACKAGE_YEAR=2011
-PACKAGE_DATE="05/24"
+PACKAGE_YEAR=2009
+PACKAGE_DATE="05/29"
 
 AC_DEFINE_UNQUOTED(PACKAGE_NAME,["${PACKAGE_NAME}"],[Name of package])
 AC_DEFINE_UNQUOTED(PACKAGE_VERSION,["${PACKAGE_VERSION}"],[Version number])
@@ -30,28 +29,6 @@ AC_SUBST(PACKAGE_NAME)
 AC_SUBST(PACKAGE_VERSION)
 AC_SUBST(PACKAGE_YEAR)
 AC_SUBST(PACKAGE_DATE)
-
-GENERIC_LIBRARY_NAME=tesseract
-
-# Release versioning
-GENERIC_MAJOR_VERSION=3
-GENERIC_MINOR_VERSION=1
-GENERIC_MICRO_VERSION=0
-
-# API version (often = GENERIC_MAJOR_VERSION.GENERIC_MINOR_VERSION)
-GENERIC_API_VERSION=$GENERIC_MAJOR_VERSION.$GENERIC_MINOR_VERSION
-GENERIC_LIBRARY_VERSION=$GENERIC_MAJOR_VERSION:$GENERIC_MINOR_VERSION
-AC_SUBST(GENERIC_API_VERSION)
-AC_SUBST(GENERIC_MAJOR_VERSION)
-
-AC_SUBST(GENERIC_LIBRARY_VERSION)
-PACKAGE=$GENERIC_LIBRARY_NAME
-AC_SUBST(GENERIC_LIBRARY_NAME)
-
-GENERIC_VERSION=$GENERIC_MAJOR_VERSION.$GENERIC_MINOR_VERSION.$GENERIC_MICRO_VERSION
-GENERIC_RELEASE=$GENERIC_MAJOR_VERSION.$GENERIC_MINOR_VERSION
-AC_SUBST(GENERIC_RELEASE)
-AC_SUBST(GENERIC_VERSION)
 
 includedir="${includedir}/tesseract"
 
@@ -72,33 +49,6 @@ AC_ARG_WITH(extra-libraries,
           else
             AC_MSG_ERROR([Cannot stat directory $withval])
           fi ] )
-
-AC_MSG_CHECKING(--enable-graphics argument)
-AC_ARG_ENABLE([graphics],
-    [  --enable-graphics         Enable graphics (ScrollView) (default).],
-    [enable_graphics=$enableval],
-    [enable_graphics="yes"])
-AC_MSG_RESULT($enable_graphics)
-if test "$enable_graphics" = "no"; then
-  AC_DEFINE([DISABLE_GRAPHICS], [], [Disable graphics])
-fi
-
-localedir='${prefix}/share/locale'
-
-# Not used yet, so disable
-#AC_ARG_ENABLE([gettext],
-#    [  --enable-gettext         Enable gettext (default).],
-#    [enable_gettext=$enableval],
-#    [enable_gettext="yes"])
-#AC_MSG_RESULT($enable_gettext)
-#if test "$enable_gettext" = "yes"; then
-#  AM_GNU_GETTEXT_VERSION([0.17])
-#  AM_GNU_GETTEXT([external])  
-#  AC_SUBST(localedir)
-#else
-#  AC_DEFINE([NO_GETTEXT], [], [Disable Gettext])
-#fi
-#AM_CONDITIONAL([USING_GETTEXT], [test "$enable_gettext" = "yes"])
 
 # Always look into a "gnu" directory.
 curwd=`pwd`
@@ -133,8 +83,6 @@ AC_PROG_CXX(cl.exe g++)
 # Not needed
 # AC_PROG_CC
 
-AC_PROG_LIBTOOL
-
 # Automake configuration
 # ----------------------------------------
 
@@ -165,7 +113,7 @@ AC_C_BIGENDIAN
 
 # Check where all the following programs are and set
 # variables accordingly:
-LT_INIT
+AC_PROG_RANLIB
 # AC_PROG_LN_S
 # AC_PATH_PROG(MV, mv)
 # AC_PATH_PROG(CP, cp)
@@ -270,6 +218,22 @@ AC_CHECK_LIB(png,png_read_png)
 AC_CHECK_LIB(jpeg,jpeg_read_scanlines)
 AC_CHECK_LIB(pthread,sem_init)
 
+# Check location of leptonica/liblept headers.
+have_lept=no
+for incd in /usr/local/include /usr/include
+do
+  for lept in . leptonica liblept
+  do
+    if test -r "$incd/$lept/allheaders.h" ; then
+      CPPFLAGS="$CPPFLAGS -I$incd/$lept"
+      have_lept=yes
+    fi
+  done
+done
+if test "$have_lept" = yes ; then
+AC_CHECK_LIB(lept,pixCreate)
+fi
+
 # ----------------------------------------
 # Checks for header files.
 # ----------------------------------------
@@ -322,36 +286,11 @@ AC_CHECK_FUNCS(acos asin)
 # [ no_jpeg=yes
 #   AC_MSG_WARN([JPEG support is disabled]) ])
 
-dnl ------------------------------------------------------------
-dnl check for libtiff
-dnl ------------------------------------------------------------
-AC_CHECK_LIB(tiff, TIFFReadScanline)
-AC_CHECK_HEADER(tiffio.h,LIBTIFF='yes',AC_MSG_WARN([TIFF support is disabled]))
+# Search LIBTIFF library
+AC_PATH_LIBTIFF(,
+[ no_libtiff=yes
+  AC_MSG_WARN([TIFF support is disabled]) ])
 
-# Check location of leptonica/liblept headers.
-AC_MSG_CHECKING(for leptonica)
-AC_ARG_VAR(LIBLEPT_HEADERSDIR,[Leptonica headers directory])
-
-have_lept=no
-if test "$LIBLEPT_HEADERSDIR" = "" ; then
-  LIBLEPT_HEADERSDIR="/usr/local/include /usr/include"
-fi
-for incd in $LIBLEPT_HEADERSDIR
-do
-  for lept in . leptonica liblept
-  do
-    if test -r "$incd/$lept/allheaders.h" ; then
-      CPPFLAGS="$CPPFLAGS -I$incd/$lept"
-      have_lept=yes
-    fi
-  done
-done
-if test "$have_lept" = yes ; then
-  AC_MSG_RESULT(yes)
-  AC_CHECK_LIB(lept,pixCreate,[], AC_MSG_ERROR([leptonica library missing]))
-else
-  AC_MSG_ERROR([leptonica not found])
-fi
 
 # ----------------------------------------
 # Final Tasks and Output
@@ -364,19 +303,14 @@ fi
 
 # Output files
 AC_CONFIG_FILES(Makefile)
-#if test "$enable_gettext" = "yes"; then
-#AC_CONFIG_FILES(po/Makefile.in)
-#fi
-AC_CONFIG_FILES(api/Makefile)
 AC_CONFIG_FILES(ccmain/Makefile)
 AC_CONFIG_FILES(ccstruct/Makefile)
 AC_CONFIG_FILES(ccutil/Makefile)
 AC_CONFIG_FILES(classify/Makefile)
-AC_CONFIG_FILES(cube/Makefile)
 AC_CONFIG_FILES(cutil/Makefile)
 AC_CONFIG_FILES(dict/Makefile)
+AC_CONFIG_FILES(pageseg/Makefile)
 AC_CONFIG_FILES(image/Makefile)
-AC_CONFIG_FILES(neural_networks/runtime/Makefile)
 AC_CONFIG_FILES(textord/Makefile)
 AC_CONFIG_FILES(viewer/Makefile)
 AC_CONFIG_FILES(wordrec/Makefile)
@@ -385,14 +319,13 @@ AC_CONFIG_FILES(tessdata/Makefile)
 AC_CONFIG_FILES(tessdata/configs/Makefile)
 AC_CONFIG_FILES(tessdata/tessconfigs/Makefile)
 AC_CONFIG_FILES(testing/Makefile)
-if test "$enable_graphics" = "yes"; then
+AC_CONFIG_FILES(dlltest/Makefile)
 AC_CONFIG_FILES(java/Makefile)
 AC_CONFIG_FILES(java/com/Makefile)
 AC_CONFIG_FILES(java/com/google/Makefile)
 AC_CONFIG_FILES(java/com/google/scrollview/Makefile)
 AC_CONFIG_FILES(java/com/google/scrollview/events/Makefile)
 AC_CONFIG_FILES(java/com/google/scrollview/ui/Makefile)
-fi
 # AC_CONFIG_FILES(doc/Doxyfile)
 # AC_CONFIG_FILES(doc/header.html)
 # AC_CONFIG_FILES(doc/footer.html)
@@ -426,16 +359,6 @@ AH_BOTTOM([
 
 /* Miscellaneous defines */
 #define AUTOCONF 1
-
-#ifdef DISABLE_GRAPHICS
-#define GRAPHICS_DISABLED
-#endif
-
-/* Not used yet
-#ifndef NO_GETTEXT
-#define USING_GETTEXT
-#endif
-*/
 
 /* config_auto.h: end */
 #endif
