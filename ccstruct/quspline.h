@@ -37,7 +37,7 @@ class QSPLINE
                                   QSPLINE *,
                                   float);
   friend void make_holed_baseline(TBOX *, int, QSPLINE *, QSPLINE *, float);
-  friend void tweak_row_baseline(ROW *, double, double);
+  friend void tweak_row_baseline(ROW *);
   public:
     QSPLINE() {  //empty constructor
       segments = 0;
@@ -80,7 +80,26 @@ class QSPLINE
               ScrollView::Color colour) const;  //in colour
 #endif
 
-    QSPLINE & operator= (
+    void prep_serialise() {  //set ptrs to counts
+    }                            //not required
+
+    void dump(  //write external bits
+              FILE *f) {
+      serialise_bytes (f, (void *) xcoords, (segments + 1) * sizeof (inT32));
+      serialise_bytes (f, (void *) quadratics, segments * sizeof (QUAD_COEFFS));
+    }
+
+    void de_dump(  //read external bits
+                 FILE *f) {
+      xcoords = (inT32 *) de_serialise_bytes (f,
+        (segments + 1) * sizeof (inT32));
+      quadratics = (QUAD_COEFFS *) de_serialise_bytes (f,
+        segments *
+        sizeof (QUAD_COEFFS));
+    }
+
+                                 //assign copy
+    make_serialise (QSPLINE) QSPLINE & operator= (
       const QSPLINE & source);   //from this
 
   private:

@@ -21,7 +21,7 @@
 #define           PITHSYNC_H
 
 #include          "blobbox.h"
-#include          "params.h"
+#include          "varable.h"
 #include          "statistc.h"
 #include          "notdll.h"
 

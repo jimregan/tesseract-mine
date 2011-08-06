@@ -19,7 +19,7 @@
 		<Configuration
 			Name="Release|Win32"
 			OutputDirectory=".."
-			IntermediateDirectory="$(ConfigurationName)\$(ProjectName)"
+			IntermediateDirectory=".\combine.Release"
 			ConfigurationType="1"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
 			UseOfMFC="0"
@@ -53,7 +53,12 @@
 				StringPooling="true"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
+				PrecompiledHeaderFile=".\combine.Release/combine_tessdata.pch"
+				AssemblerListingLocation=".\combine.Release/"
+				ObjectFile=".\combine.Release/"
+				ProgramDataBaseFileName=".\combine.Release/"
 				BrowseInformation="0"
+				BrowseInformationFile=".\combine.Release/"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
 			/>
@@ -108,7 +113,7 @@
 		<Configuration
 			Name="Debug|Win32"
 			OutputDirectory=".\bin.dbg"
-			IntermediateDirectory="$(ConfigurationName)\$(ProjectName)"
+			IntermediateDirectory=".\combine.Debug"
 			ConfigurationType="1"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
 			UseOfMFC="0"
@@ -138,6 +143,10 @@
 				PreprocessorDefinitions="_DEBUG;TRAINING;WIN32;_WINDOWS;__NT__;__MSW32__;_CRT_SECURE_NO_WARNINGS"
 				MinimalRebuild="true"
 				RuntimeLibrary="3"
+				PrecompiledHeaderFile=".\combine.Debug/combine_tessdata.pch"
+				AssemblerListingLocation=".\combine.Debug/"
+				ObjectFile=".\combine.Debug/"
+				ProgramDataBaseFileName=".\combine.Debug/"
 				BrowseInformation="1"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
@@ -156,7 +165,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="ws2_32.lib user32.lib ..\vs2008\lib\libleptd.lib"
+				AdditionalDependencies="ws2_32.lib user32.lib ..\vs2008\lib\leptonlibd.lib"
 				OutputFile=".\bin.dbg\combine_tessdata.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -194,7 +203,7 @@
 		<Configuration
 			Name="Release.dynamic|Win32"
 			OutputDirectory="$(ConfigurationName)"
-			IntermediateDirectory="$(ConfigurationName)\$(ProjectName)"
+			IntermediateDirectory="$(ConfigurationName)"
 			ConfigurationType="1"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
 			UseOfMFC="0"
@@ -228,7 +237,12 @@
 				StringPooling="true"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
+				PrecompiledHeaderFile=".\combine.rd/combine_tessdata.pch"
+				AssemblerListingLocation=".\combine.rd/"
+				ObjectFile=".\combine.Release/"
+				ProgramDataBaseFileName=".\combine.rd/"
 				BrowseInformation="0"
+				BrowseInformationFile=".\combine.rd/"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
 			/>

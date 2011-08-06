@@ -15,8 +15,11 @@
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
 ******************************************************************************/
+/*----------------------------------------------------------------------------
+          Include Files and Type Defines
+-----------------------------------------------------------------------------*/
 #include "mergenf.h"
-#include "host.h"
+#include "general.h"
 #include "efio.h"
 #include "clusttool.h"
 #include "cluster.h"
@@ -27,13 +30,16 @@
 #include "const.h"
 #include "featdefs.h"
 #include "intproto.h"
-#include "params.h"
+#include "varable.h"
 
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
 
 
+/*----------------------------------------------------------------------------
+          Variables
+-----------------------------------------------------------------------------*/
 /*-------------------once in subfeat---------------------------------*/
 double_VAR(training_angle_match_scale, 1.0, "Angle Match Scale ...");
 
@@ -48,6 +54,15 @@ double_VAR(training_orthogonal_bbox_pad, 2.5, "Orthogonal bounding box pad ...")
 
 double_VAR(training_angle_pad, 45.0, "Angle pad ...");
 
+/*----------------------------------------------------------------------------
+          Global Data Definitions and Declarations
+----------------------------------------------------------------------------*/
+//int row_number;     /* kludge due to linking problems */
+
+/*----------------------------------------------------------------------------
+              Public Code
+----------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 /**
  * Compare protos p1 and p2 and return an estimate of the
  * worst evidence rating that will result for any part of p1
@@ -115,6 +130,7 @@ FLOAT32 CompareProtos(PROTO p1, PROTO p2) {
 
 } /* CompareProtos */
 
+/*---------------------------------------------------------------------------*/
 /**
  * This routine computes a proto which is the weighted
  * average of protos p1 and p2.  The new proto is returned
@@ -134,7 +150,8 @@ void ComputeMergedProto (PROTO  p1,
                          PROTO  p2,
                          FLOAT32  w1,
                          FLOAT32  w2,
-                         PROTO  MergedProto) {
+                         PROTO  MergedProto)
+{
   FLOAT32 TotalWeight;
 
   TotalWeight = w1 + w2;
@@ -148,6 +165,7 @@ void ComputeMergedProto (PROTO  p1,
   FillABC(MergedProto);
 } /* ComputeMergedProto */
 
+/*---------------------------------------------------------------------------*/
 /**
  * This routine searches thru all of the prototypes in
  * Class and returns the id of the proto which would provide
@@ -193,6 +211,7 @@ int FindClosestExistingProto(CLASS_TYPE Class, int NumMerged[],
   return BestProto;
 } /* FindClosestExistingProto */
 
+/*---------------------------------------------------------------------------*/
 /**
  * This fills in the fields of the New proto based on the
  * fields of the Old proto.
@@ -244,7 +263,9 @@ FLOAT32 SubfeatureEvidence(FEATURE Feature, PROTO Proto) {
  * approximation.  The equation that represents the transform is:
  *       1 / (1 + (sim / midpoint) ^ curl)
  */
-double EvidenceOf (double Similarity) {
+FLOAT32 EvidenceOf (
+  register FLOAT32   Similarity)
+{
 
   Similarity /= training_similarity_midpoint;
 
@@ -253,11 +274,13 @@ double EvidenceOf (double Similarity) {
   else if (training_similarity_curl == 2)
     Similarity = Similarity * Similarity;
   else
-    Similarity = pow (Similarity, training_similarity_curl);
+    Similarity = static_cast<float>(pow(static_cast<double>(Similarity),
+	                                    training_similarity_curl));
 
   return (1.0 / (1.0 + Similarity));
 }
 
+/*---------------------------------------------------------------------------*/
 /**
  * This routine returns TRUE if Feature would be matched
  * by a fast match table built from Proto.
@@ -298,6 +321,7 @@ BOOL8 DummyFastMatch (
                      Feature->Params[PicoFeatY]);
 } /* DummyFastMatch */
 
+/*----------------------------------------------------------------------------*/
 /**
  * This routine computes a bounding box that encloses the
  * specified proto along with some padding.  The
@@ -335,6 +359,7 @@ void ComputePaddedBoundingBox (PROTO  Proto, FLOAT32  TangentPad,
 
 } /* ComputePaddedBoundingBox */
 
+/*--------------------------------------------------------------------------*/
 /**
  * Return TRUE if point (X,Y) is inside of Rectangle.
  *

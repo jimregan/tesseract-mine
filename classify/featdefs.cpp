@@ -64,8 +64,8 @@ DefineFeature (PicoFeatDesc, 2, 1, 1, MAX_UINT8, "Pico", "pf", PicoFeatParams)
 StartParamDesc (CharNormParams)
 DefineParam (0, 0, -0.25, 0.75)
 DefineParam (0, 1, 0.0, 1.0)
-DefineParam (0, 0, 0.0, 1.0)
-DefineParam (0, 0, 0.0, 1.0)
+DefineParam (0, 1, 0.0, 1.0)
+DefineParam (0, 1, 0.0, 1.0)
 EndParamDesc
 /* now define the feature type itself (see features.h for info about each
   parameter).*/
@@ -83,23 +83,22 @@ EndParamDesc
 DefineFeature (OutlineFeatDesc, 3, 1, 1, MAX_OUTLINE_FEATURES, "Outline",
                "of", OutlineFeatParams)
 
-static const FEATURE_DESC_STRUCT *DescDefs[NUM_FEATURE_TYPES] = {
-  &MicroFeatureDesc,
-  &PicoFeatDesc,
-  &OutlineFeatDesc,
-  &CharNormDesc
+/*-----------------------------------------------------------------------------
+        Global Data Definitions and Declarations
+-----------------------------------------------------------------------------*/
+FEATURE_DEFS_STRUCT FeatureDefs = {
+  NUM_FEATURE_TYPES,
+  {
+    &MicroFeatureDesc,
+      &PicoFeatDesc,
+      &OutlineFeatDesc,
+      &CharNormDesc
+  }
 };
 
 /*-----------------------------------------------------------------------------
               Public Code
 -----------------------------------------------------------------------------*/
-void InitFeatureDefs(FEATURE_DEFS_STRUCT *featuredefs) {
-  featuredefs->NumFeatureTypes = NUM_FEATURE_TYPES;
-  for (int i = 0; i < NUM_FEATURE_TYPES; ++i) {
-    featuredefs->FeatureDesc[i] = DescDefs[i];
-  }
-}
-
 /*---------------------------------------------------------------------------*/
 /**
  * Release the memory consumed by the specified character
@@ -136,7 +135,7 @@ void FreeCharDescription(CHAR_DESC CharDesc) {
  * @note Exceptions: none
  * @note History: Wed May 23 15:27:10 1990, DSJ, Created.
  */
-CHAR_DESC NewCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs) {
+CHAR_DESC NewCharDescription() {
   CHAR_DESC CharDesc;
   int i;
 
@@ -171,8 +170,7 @@ CHAR_DESC NewCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs) {
  * @note Exceptions: none
  * @note History: Wed May 23 17:21:18 1990, DSJ, Created.
  */
-void WriteCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs,
-                          FILE *File, CHAR_DESC CharDesc) {
+void WriteCharDescription(FILE *File, CHAR_DESC CharDesc) {
   int Type;
   int NumSetsToWrite = 0;
 
@@ -210,8 +208,7 @@ void WriteCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs,
  * - ILLEGAL_NUM_SETS
  * @note History: Wed May 23 17:32:48 1990, DSJ, Created.
  */
-CHAR_DESC ReadCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs,
-                              FILE *File) {
+CHAR_DESC ReadCharDescription(FILE *File) {
   int NumSetsToRead;
   char ShortName[FEAT_NAME_SIZE];
   CHAR_DESC CharDesc;
@@ -221,10 +218,10 @@ CHAR_DESC ReadCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs,
     NumSetsToRead < 0 || NumSetsToRead > FeatureDefs.NumFeatureTypes)
     DoError (ILLEGAL_NUM_SETS, "Illegal number of feature sets");
 
-  CharDesc = NewCharDescription(FeatureDefs);
+  CharDesc = NewCharDescription ();
   for (; NumSetsToRead > 0; NumSetsToRead--) {
     fscanf (File, "%s", ShortName);
-    Type = ShortNameToFeatureType(FeatureDefs, ShortName);
+    Type = ShortNameToFeatureType (ShortName);
     CharDesc->FeatureSets[Type] =
       ReadFeatureSet (File, FeatureDefs.FeatureDesc[Type]);
   }
@@ -234,6 +231,7 @@ CHAR_DESC ReadCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs,
 
 
 /*---------------------------------------------------------------------------*/
+int ShortNameToFeatureType(const char *ShortName) {
 /**
  * Search thru all features currently defined and return
  * the feature type for the feature with the specified short
@@ -248,8 +246,6 @@ CHAR_DESC ReadCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs,
  * - ILLEGAL_SHORT_NAME
  * @note History: Wed May 23 15:36:05 1990, DSJ, Created.
  */
-int ShortNameToFeatureType(const FEATURE_DEFS_STRUCT &FeatureDefs,
-                           const char *ShortName) {
   int i;
 
   for (i = 0; i < FeatureDefs.NumFeatureTypes; i++)

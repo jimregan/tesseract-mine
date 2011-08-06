@@ -19,7 +19,7 @@
 		<Configuration
 			Name="Release|Win32"
 			OutputDirectory=".."
-			IntermediateDirectory="$(ConfigurationName)\$(ProjectName)"
+			IntermediateDirectory=".\w2d.Release"
 			ConfigurationType="1"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
 			UseOfMFC="0"
@@ -57,6 +57,9 @@
 				UsePrecompiledHeader="0"
 				PrecompiledHeaderThrough=""
 				PrecompiledHeaderFile=""
+				AssemblerListingLocation=".\w2d.Release/"
+				ObjectFile=".\w2d.Release/"
+				ProgramDataBaseFileName=".\w2d.Release/"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
 			/>
@@ -74,7 +77,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions="/NODEFAULTLIB:library"
-				AdditionalDependencies="ws2_32.lib user32.lib zlib-static-mtdll.lib libpng-static-mtdll.lib libjpeg-static-mtdll.lib libtiff-static-mtdll.lib giflib-static-mtdll.lib liblept-static-mtdll.lib"
+				AdditionalDependencies="ws2_32.lib user32.lib zlib-static-mtdll.lib libpng-static-mtdll.lib libjpeg-static-mtdll.lib libtiff-static-mtdll.lib giflib-static-mtdll.lib leptonlib-static-mtdll.lib"
 				OutputFile=".\bin\wordlist2dawg.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -114,7 +117,7 @@
 		<Configuration
 			Name="Debug|Win32"
 			OutputDirectory=".\bin.dbg"
-			IntermediateDirectory="$(ConfigurationName)\$(ProjectName)"
+			IntermediateDirectory=".\w2d.Debug"
 			ConfigurationType="1"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
 			UseOfMFC="0"
@@ -147,6 +150,11 @@
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
 				UsePrecompiledHeader="2"
+				PrecompiledHeaderThrough="mfcpch.h"
+				PrecompiledHeaderFile=".\w2d.Debug/wordlist2dawg.pch"
+				AssemblerListingLocation=".\w2d.Debug/"
+				ObjectFile=".\w2d.Debug/"
+				ProgramDataBaseFileName=".\w2d.Debug/"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
 				DebugInformationFormat="4"
@@ -164,7 +172,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="ws2_32.lib user32.lib ..\vs2008\lib\libleptd.lib"
+				AdditionalDependencies="ws2_32.lib user32.lib ..\vs2008\lib\leptonlibd.lib"
 				OutputFile=".\bin.dbg\wordlist2dawg.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -202,7 +210,7 @@
 		<Configuration
 			Name="Release.dynamic|Win32"
 			OutputDirectory="$(ConfigurationName)"
-			IntermediateDirectory="$(ConfigurationName)\$(ProjectName)"
+			IntermediateDirectory="$(ConfigurationName)"
 			ConfigurationType="1"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
 			UseOfMFC="0"
@@ -240,6 +248,9 @@
 				UsePrecompiledHeader="0"
 				PrecompiledHeaderThrough=""
 				PrecompiledHeaderFile=""
+				AssemblerListingLocation=".\w2d.rd/"
+				ObjectFile=".\w2d.Release/"
+				ProgramDataBaseFileName=".\w2d.rd/"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
 			/>
@@ -257,7 +268,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions="/NODEFAULTLIB:library"
-				AdditionalDependencies="ws2_32.lib user32.lib liblept.lib"
+				AdditionalDependencies="ws2_32.lib user32.lib leptonlib.lib"
 				OutputFile=".\bin.rd\wordlist2dawg.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"

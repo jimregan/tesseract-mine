@@ -20,6 +20,7 @@
 -----------------------------------------------------------------------------*/
 #include "extract.h"
 #include "flexfx.h"
+#include "funcdefs.h"
 #include "danerror.h"
 
 typedef CHAR_FEATURES (*CF_FUNC) ();
@@ -49,17 +50,15 @@ int CurrentFx = DEFAULT_FX;
  * extraction.  The caller can extract any type of features
  * from a blob without understanding any lower level details.
  *
- * @param FeatureDefs	definitions of feature types/extractors
- * @param denorm	Normalize/denormalize to access original image
  * @param Blob		blob to extract features from
+ * @param LineStats	statistics about line blob is in
  *
  * @return The character features extracted from Blob.
  * @note Exceptions: none
  * @note History: Sun Jan 21 10:07:28 1990, DSJ, Created.
  */
-CHAR_DESC ExtractBlobFeatures(const FEATURE_DEFS_STRUCT &FeatureDefs,
-                              const DENORM& denorm, TBLOB *Blob) {
-  return (ExtractFlexFeatures(FeatureDefs, Blob, denorm));
+CHAR_DESC ExtractBlobFeatures(TBLOB *Blob, LINE_STATS *LineStats) { 
+  return (ExtractFlexFeatures (Blob, LineStats));
 }                                /* ExtractBlobFeatures */
 
 /*-----------------------------------------------------------------------------

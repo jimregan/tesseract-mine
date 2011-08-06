@@ -46,7 +46,7 @@ typedef unsigned int uintptr_t;
 #endif
 
 /* VC++6 doesn't seem to have powf, expf. */
-#if (_MSC_VER < 1400)
+#if (_MSC_VER <= 1400)
 #define powf(x, y) (float)pow((double)(x), (double)(y))
 #define expf(x) (float)exp((double)(x))
 #endif
@@ -57,13 +57,10 @@ typedef unsigned int uintptr_t;
 
 #ifdef _WIN32
 
-/* DLL EXPORTS and IMPORTS:
- * Important: LEPTONLIB_* is deprected.  It is retained here only for
- * compatibility with tesseract 3.00.  In your project files, use
- * LIBLEPT_EXPORTS and LIBLEPT_IMPORTS  */
-#if defined(LIBLEPT_EXPORTS) || defined(LEPTONLIB_EXPORTS)
+/* DLL EXPORT/IMPORT */
+#ifdef LEPTONLIB_EXPORTS
 #define LEPT_DLL __declspec(dllexport)
-#elif defined(LIBLEPT_IMPORTS) || defined(LEPTONLIB_IMPORTS)
+#elif defined(LEPTONLIB_IMPORTS)
 #define LEPT_DLL __declspec(dllimport)
 #else
 #define LEPT_DLL
@@ -76,7 +73,6 @@ typedef unsigned int uintptr_t;
 
 typedef intptr_t l_intptr_t;
 typedef uintptr_t l_uintptr_t;
-typedef void *L_TIMER;
 
 
 /*--------------------------------------------------------------------*
@@ -122,13 +118,12 @@ typedef void *L_TIMER;
  *       Environ variables for uncompressed formatted image I/O       *
  *--------------------------------------------------------------------*/
 /*
- *  Leptonica supplies image I/O for pnm, bmp, ps, and pdf.
+ *  Leptonica supplies image I/O for pnm, bmp and ps.
  *  Setting any of these to 0 causes non-functioning stubs to be linked.
  */
 #define  USE_BMPIO        1
 #define  USE_PNMIO        1
 #define  USE_PSIO         1
-#define  USE_PDFIO        1
 
 
 /*--------------------------------------------------------------------*
@@ -274,8 +269,9 @@ enum {
  *                        snprintf() renamed in MSVC                      *
  *------------------------------------------------------------------------*/
 #ifdef _MSC_VER
-#define snprintf(buf, size, ...)  _snprintf_s(buf, size, _TRUNCATE, __VA_ARGS__)
+#define snprintf _snprintf
 #endif
 
 
 #endif /* LEPTONICA_ENVIRON_H */
+

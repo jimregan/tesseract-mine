@@ -25,9 +25,6 @@
 
 namespace tesseract {
 
-// Minimum width of a column to be interesting as a multiple of resolution.
-const double kMinColumnWidth = 2.0 / 3;
-
 ELISTIZE(ColPartitionSet)
 
 ColPartitionSet::ColPartitionSet(ColPartition_LIST* partitions) {
@@ -321,8 +318,8 @@ bool ColPartitionSet::CompatibleColumns(bool debug, ColPartitionSet* other,
     while (!it2.at_last()) {
       it2.forward();
       ColPartition* next_part = it2.data();
-      if (!BLOBNBOX::IsTextType(next_part->blob_type()))
-        continue;  // Non-text partitions are irrelevant.
+      if (next_part->blob_type() <= BRT_UNKNOWN)
+        continue;  // Image partitions are irrelevant.
       int next_left = next_part->bounding_box().left();
       if (next_left == right) {
         break;  // They share the same edge, so one must be a pull-out.
@@ -370,42 +367,16 @@ bool ColPartitionSet::CompatibleColumns(bool debug, ColPartitionSet* other,
   return true;
 }
 
-// Returns the total width of all blobs in the part_set that do not lie
-// within an approved column. Used as a cost measure for using this
-// column set over another that might be compatible.
-int ColPartitionSet::UnmatchedWidth(ColPartitionSet* part_set) {
-  int total_width = 0;
-  ColPartition_IT it(&part_set->parts_);
-  for (it.mark_cycle_pt(); !it.cycled_list(); it.forward()) {
-    ColPartition* part = it.data();
-    if (!BLOBNBOX::IsTextType(part->blob_type())) {
-      continue;  // Non-text partitions are irrelevant to column compatibility.
-    }
-    int y = part->MidY();
-    BLOBNBOX_C_IT box_it(part->boxes());
-    for (box_it.mark_cycle_pt(); !box_it.cycled_list(); box_it.forward()) {
-      const TBOX& box = it.data()->bounding_box();
-      // Assume that the whole blob is outside any column iff its x-middle
-      // is outside.
-      int x = (box.left() + box.right()) / 2;
-      ColPartition* col = ColumnContaining(x, y);
-      if (col == NULL)
-        total_width += box.width();
-    }
-  }
-  return total_width;
-}
-
 // Return true if this ColPartitionSet makes a legal column candidate by
 // having legal individual partitions and non-overlapping adjacent pairs.
 bool ColPartitionSet::LegalColumnCandidate() {
   ColPartition_IT it(&parts_);
   if (it.empty())
     return false;
-  bool any_text_parts = false;
+  int any_text_parts = false;
   for (it.mark_cycle_pt(); !it.cycled_list(); it.forward()) {
     ColPartition* part = it.data();
-    if (BLOBNBOX::IsTextType(part->blob_type())) {
+    if (part->blob_type() > BRT_UNKNOWN) {
       if (!part->IsLegal())
         return false;  // Individual partition is illegal.
       any_text_parts = true;
@@ -427,7 +398,7 @@ ColPartitionSet* ColPartitionSet::Copy(bool good_only) {
   ColPartition_IT dest_it(&copy_parts);
   for (src_it.mark_cycle_pt(); !src_it.cycled_list(); src_it.forward()) {
     ColPartition* part = src_it.data();
-    if (BLOBNBOX::IsTextType(part->blob_type()) &&
+    if (part->blob_type() > BRT_UNKNOWN &&
         (!good_only || part->good_width() || part->good_column()))
       dest_it.add_after_then_move(part->ShallowCopy());
   }
@@ -463,24 +434,23 @@ void ColPartitionSet::DisplayColumnEdges(int y_bottom, int y_top,
   }
 }
 
-// Return the ColumnSpanningType that best explains the columns overlapped
+// Return the PolyBlockType that best explains the columns overlapped
 // by the given coords(left,right,y), with the given margins.
 // Also return the first and last column index touched by the coords and
-// the leftmost spanned column.
-// Column indices are 2n + 1 for real columns (0 based) and even values
+// the leftmost and rightmost spanned columns.
+// Column indices are 2n + 1 for real colums (0 based) and even values
 // represent the gaps in between columns, with 0 being left of the leftmost.
-// resolution refers to the ppi resolution of the image.
-ColumnSpanningType ColPartitionSet::SpanningType(int resolution,
-                                                 int left, int right, int y,
-                                                 int left_margin,
-                                                 int right_margin,
-                                                 int* first_col,
-                                                 int* last_col,
-                                                 int* first_spanned_col) {
+PolyBlockType ColPartitionSet::SpanningType(BlobRegionType type,
+                                            int left, int right, int y,
+                                            int left_margin, int right_margin,
+                                            int* first_col, int* last_col,
+                                            int* first_spanned_col,
+                                            int* last_spanned_col) {
   *first_col = -1;
   *last_col = -1;
   *first_spanned_col = -1;
-  int margin_columns = 0;
+  *last_spanned_col = -1;
+  int columns_spanned = 0;
   ColPartition_IT it(&parts_);
   int col_index = 1;
   for (it.mark_cycle_pt(); !it.cycled_list(); it.forward(), col_index += 2) {
@@ -494,12 +464,19 @@ ColumnSpanningType ColPartitionSet::SpanningType(int resolution,
       if (part->ColumnContains(right, y)) {
         // Both within a single column.
         *last_col = col_index;
-        return CST_FLOWING;
+        if (type == BRT_HLINE)
+          return PT_FLOWING_LINE;
+        else if (type > BRT_UNKNOWN)
+          return type == BRT_VERT_TEXT ? PT_VERTICAL_TEXT : PT_FLOWING_TEXT;
+        else
+          return PT_FLOWING_IMAGE;
       }
       if (left_margin <= part->LeftAtY(y)) {
         // It completely spans this column.
+        *last_col = col_index;
         *first_spanned_col = col_index;
-        margin_columns = 1;
+        *last_spanned_col = col_index;
+        columns_spanned = 1;
       }
     } else if (part->ColumnContains(right, y)) {
       if (*first_col < 0) {
@@ -508,22 +485,23 @@ ColumnSpanningType ColPartitionSet::SpanningType(int resolution,
       }
       if (right_margin >= part->RightAtY(y)) {
         // It completely spans this column.
-        if (margin_columns == 0)
+        if (columns_spanned == 0)
           *first_spanned_col = col_index;
-        ++margin_columns;
+        *last_spanned_col = col_index;
+        ++columns_spanned;
       }
       *last_col = col_index;
       break;
     } else if (left < part->LeftAtY(y) && right > part->RightAtY(y)) {
       // Neither left nor right are contained within, so it spans this
       // column.
-      if (*first_col < 0) {
-        // It started in between the previous column and the current column.
-        *first_col = col_index - 1;
-      }
-      if (margin_columns == 0)
+      if (columns_spanned == 0) {
+        *first_col = col_index;
         *first_spanned_col = col_index;
+      }
       *last_col = col_index;
+      *last_spanned_col = col_index;
+      ++columns_spanned;
     } else if (right < part->LeftAtY(y)) {
       // We have gone past the end.
       *last_col = col_index - 1;
@@ -540,21 +518,26 @@ ColumnSpanningType ColPartitionSet::SpanningType(int resolution,
     *last_col = col_index - 1;  // The last in-between.
   ASSERT_HOST(*first_col >= 0 && *last_col >= 0);
   ASSERT_HOST(*first_col <= *last_col);
-  if (*first_col == *last_col && right - left < kMinColumnWidth * resolution) {
+  if (columns_spanned == 0 && *first_col == *last_col) {
     // Neither end was in a column, and it didn't span any, so it lies
     // entirely between columns, therefore noise.
-    return CST_NOISE;
-  } else if (margin_columns <= 1) {
-    // An exception for headings that stick outside of single-column text.
-    if (margin_columns == 1 && parts_.singleton()) {
-      return CST_HEADING;
-    }
-    // It is a pullout, as left and right were not in the same column, but
-    // it doesn't go to the edge of its start and end.
-    return CST_PULLOUT;
+    return PT_NOISE;
+  } else if (columns_spanned <= 1) {
+    // It is a pullout, as left and right were not in the same column.
+    if (type == BRT_HLINE)
+      return PT_PULLOUT_LINE;
+    else if (type > BRT_UNKNOWN)
+      return type == BRT_VERT_TEXT ? PT_VERTICAL_TEXT : PT_PULLOUT_TEXT;
+    else
+      return PT_PULLOUT_IMAGE;
   }
-  // Its margins went to the edges of first and last columns => heading.
-  return CST_HEADING;
+  // It completely spanned more than one column. Always a heading.
+  if (type == BRT_HLINE)
+    return PT_HEADING_LINE;
+  else if (type > BRT_UNKNOWN)
+    return type == BRT_VERT_TEXT ? PT_VERTICAL_TEXT : PT_HEADING_TEXT;
+  else
+    return PT_HEADING_IMAGE;
 }
 
 // The column_set has changed. Close down all in-progress WorkingPartSets in

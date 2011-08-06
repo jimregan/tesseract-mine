@@ -19,7 +19,7 @@
 		<Configuration
 			Name="Debug|Win32"
 			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="$(ConfigurationName)\$(ProjectName)"
+			IntermediateDirectory="$(ConfigurationName)"
 			ConfigurationType="4"
 			CharacterSet="2"
 			>
@@ -81,7 +81,7 @@
 		<Configuration
 			Name="Release|Win32"
 			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="$(ConfigurationName)\$(ProjectName)"
+			IntermediateDirectory="$(ConfigurationName)"
 			ConfigurationType="4"
 			CharacterSet="2"
 			WholeProgramOptimization="1"
@@ -145,7 +145,7 @@
 		<Configuration
 			Name="Release.dynamic|Win32"
 			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="$(ConfigurationName)\$(ProjectName)"
+			IntermediateDirectory="$(ConfigurationName)"
 			ConfigurationType="4"
 			CharacterSet="2"
 			WholeProgramOptimization="1"
@@ -216,7 +216,15 @@
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
 			<File
+				RelativePath="..\dict\choices.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\dict\context.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\dict\conversion.cpp"
 				>
 			</File>
 			<File
@@ -233,6 +241,10 @@
 			</File>
 			<File
 				RelativePath="..\dict\permdawg.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\dict\permngram.cpp"
 				>
 			</File>
 			<File
@@ -258,6 +270,22 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
+				RelativePath="..\dict\choicearr.h"
+				>
+			</File>
+			<File
+				RelativePath="..\dict\choices.h"
+				>
+			</File>
+			<File
+				RelativePath="..\dict\context.h"
+				>
+			</File>
+			<File
+				RelativePath="..\dict\conversion.h"
+				>
+			</File>
+			<File
 				RelativePath="..\dict\dawg.h"
 				>
 			</File>
@@ -267,6 +295,14 @@
 			</File>
 			<File
 				RelativePath="..\dict\matchdefs.h"
+				>
+			</File>
+			<File
+				RelativePath="..\dict\permdawg.h"
+				>
+			</File>
+			<File
+				RelativePath="..\dict\permngram.h"
 				>
 			</File>
 			<File

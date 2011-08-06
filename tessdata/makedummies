@@ -1,7 +1,5 @@
 #!/bin/sh
-UNICHARSET_VERSION="v1"
-for f in DangAmbigs freq-dawg.${UNICHARSET_VERSION} inttemp normproto pffmtable
-  unicharset.${UNICHARSET_VERSION} user-words word-dawg.${UNICHARSET_VERSION}
+for f in DangAmbigs freq-dawg inttemp normproto pffmtable unicharset user-words word-dawg
 do
 	if [ ! -r $1.$f ]
 	then

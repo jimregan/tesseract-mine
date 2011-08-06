@@ -19,7 +19,7 @@
 		<Configuration
 			Name="Debug|Win32"
 			OutputDirectory=".\bin.dbg"
-			IntermediateDirectory="$(ConfigurationName)\$(ProjectName)"
+			IntermediateDirectory=".\mftrain.Debug"
 			ConfigurationType="1"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
 			UseOfMFC="0"
@@ -49,6 +49,10 @@
 				PreprocessorDefinitions="_DEBUG;TRAINING;WIN32;_WINDOWS;__NT__;__MSW32__;_CRT_SECURE_NO_WARNINGS"
 				MinimalRebuild="true"
 				RuntimeLibrary="3"
+				PrecompiledHeaderFile=".\mftrain.Debug/mftraining.pch"
+				AssemblerListingLocation=".\mftrain.Debug/"
+				ObjectFile=".\mftrain.Debug/"
+				ProgramDataBaseFileName=".\mftrain.Debug/"
 				BrowseInformation="1"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
@@ -67,7 +71,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="user32.lib ws2_32.lib ..\vs2008\lib\libleptd.lib"
+				AdditionalDependencies="user32.lib ws2_32.lib ..\vs2008\lib\leptonlibd.lib"
 				OutputFile=".\bin.dbg\mftraining.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -105,7 +109,7 @@
 		<Configuration
 			Name="Release|Win32"
 			OutputDirectory=".."
-			IntermediateDirectory="$(ConfigurationName)\$(ProjectName)"
+			IntermediateDirectory=".\mftrain.Release"
 			ConfigurationType="1"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
 			UseOfMFC="0"
@@ -139,6 +143,10 @@
 				StringPooling="true"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
+				PrecompiledHeaderFile=".\mftrain.Release/mftraining.pch"
+				AssemblerListingLocation=".\mftrain.Release/"
+				ObjectFile=".\mftrain.Release/"
+				ProgramDataBaseFileName=".\mftrain.Release/"
 				BrowseInformation="0"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
@@ -157,7 +165,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions="/NODEFAULTLIB:library"
-				AdditionalDependencies="user32.lib ws2_32.lib zlib-static-mtdll.lib libpng-static-mtdll.lib libjpeg-static-mtdll.lib libtiff-static-mtdll.lib giflib-static-mtdll.lib liblept-static-mtdll.lib"
+				AdditionalDependencies="user32.lib ws2_32.lib zlib-static-mtdll.lib libpng-static-mtdll.lib libjpeg-static-mtdll.lib libtiff-static-mtdll.lib giflib-static-mtdll.lib leptonlib-static-mtdll.lib"
 				OutputFile=".\bin\mftraining.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -195,7 +203,7 @@
 		<Configuration
 			Name="Release.dynamic|Win32"
 			OutputDirectory="$(ConfigurationName)"
-			IntermediateDirectory="$(ConfigurationName)\$(ProjectName)"
+			IntermediateDirectory="$(ConfigurationName)"
 			ConfigurationType="1"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
 			UseOfMFC="0"
@@ -229,6 +237,10 @@
 				StringPooling="true"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
+				PrecompiledHeaderFile=".\mftrain.rd/mftraining.pch"
+				AssemblerListingLocation=".\mftrain.rd/"
+				ObjectFile=".\mftrain.Release/"
+				ProgramDataBaseFileName=".\mftrain.rd/"
 				BrowseInformation="0"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
@@ -247,7 +259,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions="/NODEFAULTLIB:library"
-				AdditionalDependencies="user32.lib ws2_32.lib liblept.lib"
+				AdditionalDependencies="user32.lib ws2_32.lib leptonlib.lib"
 				OutputFile=".\bin.rd\mftraining.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -323,6 +335,37 @@
 		</File>
 		<File
 			RelativePath="..\training\mftraining.cpp"
+			>
+			<FileConfiguration
+				Name="Debug|Win32"
+				>
+				<Tool
+					Name="VCCLCompilerTool"
+					AdditionalIncludeDirectories=""
+					PreprocessorDefinitions=""
+				/>
+			</FileConfiguration>
+			<FileConfiguration
+				Name="Release|Win32"
+				>
+				<Tool
+					Name="VCCLCompilerTool"
+					AdditionalIncludeDirectories=""
+					PreprocessorDefinitions=""
+				/>
+			</FileConfiguration>
+			<FileConfiguration
+				Name="Release.dynamic|Win32"
+				>
+				<Tool
+					Name="VCCLCompilerTool"
+					AdditionalIncludeDirectories=""
+					PreprocessorDefinitions=""
+				/>
+			</FileConfiguration>
+		</File>
+		<File
+			RelativePath="..\training\name2char.cpp"
 			>
 			<FileConfiguration
 				Name="Debug|Win32"

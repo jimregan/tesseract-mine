@@ -20,7 +20,7 @@
 #ifndef           BLREAD_H
 #define           BLREAD_H
 
-#include          "params.h"
+#include          "varable.h"
 #include          "ocrblock.h"
 
 bool read_unlv_file(                    //print list of sides

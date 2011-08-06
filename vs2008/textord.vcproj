@@ -19,7 +19,7 @@
 		<Configuration
 			Name="Debug|Win32"
 			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="$(ConfigurationName)\$(ProjectName)"
+			IntermediateDirectory="$(ConfigurationName)"
 			ConfigurationType="4"
 			CharacterSet="2"
 			>
@@ -81,7 +81,7 @@
 		<Configuration
 			Name="Release|Win32"
 			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="$(ConfigurationName)\$(ProjectName)"
+			IntermediateDirectory="$(ConfigurationName)"
 			ConfigurationType="4"
 			CharacterSet="2"
 			WholeProgramOptimization="1"
@@ -145,7 +145,7 @@
 		<Configuration
 			Name="Release.dynamic|Win32"
 			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="$(ConfigurationName)\$(ProjectName)"
+			IntermediateDirectory="$(ConfigurationName)"
 			ConfigurationType="4"
 			CharacterSet="2"
 			WholeProgramOptimization="1"
@@ -263,15 +263,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\textord\colpartitiongrid.cpp"
-				>
-			</File>
-			<File
 				RelativePath="..\textord\colpartitionset.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\textord\devanagari_processing.cpp"
 				>
 			</File>
 			<File
@@ -562,6 +554,10 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="..\textord\pagesegmain.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\textord\pithsync.cpp"
 				>
 				<FileConfiguration
@@ -698,15 +694,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\textord\tablerecog.cpp"
-				>
-			</File>
-			<File
 				RelativePath="..\textord\tabvector.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\textord\textord.cpp"
 				>
 			</File>
 			<File
@@ -930,15 +918,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\textord\colpartitiongrid.h"
-				>
-			</File>
-			<File
 				RelativePath="..\textord\colpartitionset.h"
-				>
-			</File>
-			<File
-				RelativePath="..\textord\devanagari_processing.h"
 				>
 			</File>
 			<File
@@ -1010,15 +990,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\textord\tablerecog.h"
-				>
-			</File>
-			<File
 				RelativePath="..\textord\tabvector.h"
 				>
 			</File>
 			<File
-				RelativePath="..\textord\textord.h"
+				RelativePath="..\textord\tessout.h"
 				>
 			</File>
 			<File

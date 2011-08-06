@@ -18,15 +18,14 @@
  **********************************************************************/
 
 #include "mfcpch.h"
-#include "ccstruct.h"
 #include          "statistc.h"
 #include          "quadlsq.h"
-#include          "detlinefit.h"
+#include          "lmedsq.h"
 #include          "makerow.h"
 #include          "drawtord.h"
 #include          "oldbasel.h"
-#include          "textord.h"
 #include          "tprintf.h"
+#include          "tesseractclass.h"
 
 // Include automatically generated configuration file if running autoconf.
 #ifdef HAVE_CONFIG_H
@@ -73,41 +72,41 @@ EXTERN double_VAR (textord_oldbl_jumplimit, 0.15,
 
 #define ABS(x) ((x)<0 ? (-(x)) : (x))
 
-namespace tesseract {
-
 /**********************************************************************
  * make_old_baselines
  *
  * Top level function to make baselines the old way.
  **********************************************************************/
 
-void Textord::make_old_baselines(TO_BLOCK *block,   // block to do
-                                 BOOL8 testing_on,  // correct orientation
-                                 float gradient) {
-  QSPLINE *prev_baseline;        // baseline of previous row
-  TO_ROW *row;                   // current row
-  TO_ROW_IT row_it = block->get_rows();
+void make_old_baselines(                  //make splines
+                        TO_BLOCK *block,  //block to do
+                        BOOL8 testing_on, //correct orientation
+                        float gradient,
+                        tesseract::Tesseract* tess
+                       ) {
+  QSPLINE *prev_baseline;        //baseline of previous row
+  TO_ROW *row;                   //current row
+  TO_ROW_IT row_it = block->get_rows ();
   BLOBNBOX_IT blob_it;
 
-  prev_baseline = NULL;          // nothing yet
-  for (row_it.mark_cycle_pt(); !row_it.cycled_list(); row_it.forward()) {
-    row = row_it.data();
-    find_textlines(block, row, 2, NULL);
+  prev_baseline = NULL;          //nothing yet
+  for (row_it.mark_cycle_pt (); !row_it.cycled_list (); row_it.forward ()) {
+    row = row_it.data ();
+    find_textlines(block, row, 2, NULL, tess);
     if (row->xheight <= 0 && prev_baseline != NULL)
-      find_textlines(block, row, 2, prev_baseline);
-    if (row->xheight > 0) {  // was a good one
+      find_textlines(block, row, 2, prev_baseline, tess);
+    if (row->xheight > 0)  // was a good one
       prev_baseline = &row->baseline;
-    } else {
+    else {
       prev_baseline = NULL;
-      blob_it.set_to_list(row->blob_list());
+      blob_it.set_to_list (row->blob_list ());
       if (textord_debug_baselines)
-        tprintf("Row baseline generation failed on row at (%d,%d)\n",
-          blob_it.data()->bounding_box().left(),
-          blob_it.data()->bounding_box().bottom());
+        tprintf ("Row baseline generation failed on row at (%d,%d)\n",
+          blob_it.data ()->bounding_box ().left (),
+          blob_it.data ()->bounding_box ().bottom ());
     }
   }
-  correlate_lines(block, gradient);
-  block->block->set_xheight(block->xheight);
+  correlate_lines(block, gradient, tess);
 }
 
 
@@ -119,7 +118,11 @@ void Textord::make_old_baselines(TO_BLOCK *block,   // block to do
  * Also fix baselines of rows without a decent fit.
  **********************************************************************/
 
-void Textord::correlate_lines(TO_BLOCK *block, float gradient) {
+void correlate_lines(                 //cleanup lines
+                     TO_BLOCK *block, //block to do
+                     float gradient,
+                     tesseract::Tesseract* tess
+                    ) {
   TO_ROW **rows;                 //array of ptrs
   int rowcount;                  /*no of rows to do */
   register int rowindex;         /*no of row */
@@ -139,16 +142,16 @@ void Textord::correlate_lines(TO_BLOCK *block, float gradient) {
     rows[rowindex++] = row_it.data ();
 
                                  /*try to fix bad lines */
-  correlate_neighbours(block, rows, rowcount);
+  correlate_neighbours(block, rows, rowcount, tess);
 
   if (textord_really_old_xheight || textord_old_xheight) {
     block->xheight = (float) correlate_with_stats(rows, rowcount, block);
     if (block->xheight <= 0)
-      block->xheight = block->line_size * tesseract::CCStruct::kXHeightFraction;
+      block->xheight = block->line_size * textord_merge_x;
     if (block->xheight < textord_min_xheight)
       block->xheight = (float) textord_min_xheight;
   } else {
-    compute_block_xheight(block, gradient);
+    compute_block_xheight(block, gradient, tess);
   }
 
   free_mem(rows);
@@ -161,9 +164,12 @@ void Textord::correlate_lines(TO_BLOCK *block, float gradient) {
  * Try to fix rows that had a bad spline fit by using neighbours.
  **********************************************************************/
 
-void Textord::correlate_neighbours(TO_BLOCK *block,  // block rows are in.
-                                   TO_ROW **rows,    // rows of block.
-                                   int rowcount) {   // no of rows to do.
+void correlate_neighbours(                  //fix bad rows
+                          TO_BLOCK *block,  /*block rows are in */
+                          TO_ROW **rows,    /*rows of block */
+                          int rowcount,     /*no of rows to do */
+                          tesseract::Tesseract* tess
+                         ) {
   TO_ROW *row;                   /*current row */
   register int rowindex;         /*no of row */
   register int otherrow;         /*second row */
@@ -188,14 +194,14 @@ void Textord::correlate_neighbours(TO_BLOCK *block,  // block rows are in.
         MAXOVERLAP)); otherrow++);
       lowerrow = otherrow;       /*decent row below */
       if (upperrow >= 0)
-        find_textlines(block, row, 2, &rows[upperrow]->baseline);
+        find_textlines(block, row, 2, &rows[upperrow]->baseline, tess);
       if (row->xheight < 0 && lowerrow < rowcount)
-        find_textlines(block, row, 2, &rows[lowerrow]->baseline);
+        find_textlines(block, row, 2, &rows[lowerrow]->baseline, tess);
       if (row->xheight < 0) {
         if (upperrow >= 0)
-          find_textlines(block, row, 1, &rows[upperrow]->baseline);
+          find_textlines(block, row, 1, &rows[upperrow]->baseline, tess);
         else if (lowerrow < rowcount)
-          find_textlines(block, row, 1, &rows[lowerrow]->baseline);
+          find_textlines(block, row, 1, &rows[lowerrow]->baseline, tess);
       }
     }
   }
@@ -217,9 +223,11 @@ void Textord::correlate_neighbours(TO_BLOCK *block,  // block rows are in.
  * the ascender height and descender height for rows without one.
  **********************************************************************/
 
-int Textord::correlate_with_stats(TO_ROW **rows,  // rows of block.
-                                  int rowcount,   // no of rows to do.
-                                  TO_BLOCK* block) {
+int correlate_with_stats(                //fix xheights
+                         TO_ROW **rows,  /*rows of block */
+                         int rowcount,   /*no of rows to do */
+                         TO_BLOCK* block
+                        ) {
   TO_ROW *row;                   /*current row */
   register int rowindex;         /*no of row */
   float lineheight;              /*mean x-height */
@@ -331,12 +339,15 @@ int Textord::correlate_with_stats(TO_ROW **rows,  // rows of block.
  * Compute the baseline for the given row.
  **********************************************************************/
 
-void Textord::find_textlines(TO_BLOCK *block,  // block row is in
-                             TO_ROW *row,      // row to do
-                             int degree,       // required approximation
-                             QSPLINE *spline) {  // starting spline
+void find_textlines(                  //get baseline
+                    TO_BLOCK *block,  //block row is in
+                    TO_ROW *row,      //row to do
+                    int degree,       //required approximation
+                    QSPLINE *spline,  //starting spline
+                    tesseract::Tesseract* tess
+                   ) {
   int partcount;                 /*no of partitions of */
-  BOOL8 holed_line = FALSE;      //lost too many blobs
+  BOOL8 holed_line;              //lost too many blobs
   int bestpart;                  /*biggest partition */
   char *partids;                 /*partition no of each blob */
   int partsizes[MAXPARTS];       /*no in each partition */
@@ -424,8 +435,7 @@ void Textord::find_textlines(TO_BLOCK *block,  // block row is in
     make_first_xheight (row, blobcoords, lineheight, (int) block->line_size,
                         blobcount, &row->baseline, jumplimit);
   } else {
-    compute_row_xheight(row, block->block->classify_rotation(),
-                        row->line_m(), block->line_size);
+    compute_row_xheight(row, row->line_m(), block->line_size, tess);
   }
   free_mem(partids);
   free_mem(xcoords);
@@ -433,8 +443,6 @@ void Textord::find_textlines(TO_BLOCK *block,  // block row is in
   free_mem(blobcoords);
   free_mem(ydiffs);
 }
-
-}  // namespace tesseract.
 
 
 /**********************************************************************
@@ -670,7 +678,7 @@ float gradient                   //of line
   float x;                       //centre of row
   ICOORD shift;                  //shift of spline
 
-  tesseract::DetLineFit lms;  // straight baseline
+  LMS lms(blobcount);  //straight baseline
   inT32 xstarts[2];              //straight line
   double coeffs[3];
   float c;                       //line parameter
@@ -678,13 +686,13 @@ float gradient                   //of line
                                  /*left edge of row */
   leftedge = blobcoords[0].left ();
                                  /*right edge of line */
-  rightedge = blobcoords[blobcount - 1].right();
+  rightedge = blobcoords[blobcount - 1].right ();
   for (blobindex = 0; blobindex < blobcount; blobindex++) {
-    lms.Add(ICOORD((blobcoords[blobindex].left() +
-                    blobcoords[blobindex].right()) / 2,
-                   blobcoords[blobindex].bottom()));
+    lms.add (FCOORD ((blobcoords[blobindex].left () +
+      blobcoords[blobindex].right ()) / 2.0,
+      blobcoords[blobindex].bottom ()));
   }
-  lms.ConstrainedFit(gradient, &c);
+  lms.constrained_fit (gradient, c);
   xstarts[0] = leftedge;
   xstarts[1] = rightedge;
   coeffs[0] = 0;
@@ -738,8 +746,6 @@ float ydiffs[]                   /*diff from spline */
   startx = get_ydiffs (blobcoords, blobcount, spline, ydiffs);
   *numparts = 1;                 /*1 partition */
   bestpart = -1;                 /*first point */
-  float drift = 0.0f;
-  float last_delta = 0.0f;
   for (blobindex = startx; blobindex < blobcount; blobindex++) {
   /*do each blob in row */
     diff = ydiffs[blobindex];    /*diff from line */
@@ -748,16 +754,14 @@ float ydiffs[]                   /*diff from spline */
         blobcoords[blobindex].left (),
         blobcoords[blobindex].bottom ());
     }
-    bestpart = choose_partition(diff, partdiffs, bestpart, jumplimit,
-                                &drift, &last_delta, numparts);
+    bestpart =
+      choose_partition(diff, partdiffs, bestpart, jumplimit, numparts);
                                  /*record partition */
     partids[blobindex] = bestpart;
     partsizes[bestpart]++;       /*another in it */
   }
 
   bestpart = -1;                 /*first point */
-  drift = 0.0f;
-  last_delta = 0.0f;
   partsizes[0]--;                /*doing 1st pt again */
                                  /*do each blob in row */
   for (blobindex = startx; blobindex >= 0; blobindex--) {
@@ -767,8 +771,8 @@ float ydiffs[]                   /*diff from spline */
         blobcoords[blobindex].left (),
         blobcoords[blobindex].bottom ());
     }
-    bestpart = choose_partition(diff, partdiffs, bestpart, jumplimit,
-                                &drift, &last_delta, numparts);
+    bestpart =
+      choose_partition(diff, partdiffs, bestpart, jumplimit, numparts);
                                  /*record partition */
     partids[blobindex] = bestpart;
     partsizes[bestpart]++;       /*another in it */
@@ -965,32 +969,32 @@ register float diff,             /*diff from spline */
 float partdiffs[],               /*diff on all parts */
 int lastpart,                    /*last assigned partition */
 float jumplimit,                 /*new part threshold */
-float* drift,
-float* lastdelta,
 int *partcount                   /*no of partitions */
 ) {
   register int partition;        /*partition no */
   int bestpart;                  /*best new partition */
   float bestdelta;               /*best gap from a part */
+  static float drift;            /*drift from spline */
   float delta;                   /*diff from part */
+  static float lastdelta;        /*previous delta */
 
   if (lastpart < 0) {
     partdiffs[0] = diff;
     lastpart = 0;                /*first point */
-    *drift = 0.0f;
-    *lastdelta = 0.0f;
+    drift = 0.0f;
+    lastdelta = 0.0f;
   }
                                  /*adjusted diff from part */
-  delta = diff - partdiffs[lastpart] - *drift;
+  delta = diff - partdiffs[lastpart] - drift;
   if (textord_oldbl_debug) {
-    tprintf ("Diff=%.2f, Delta=%.3f, Drift=%.3f, ", diff, delta, *drift);
+    tprintf ("Diff=%.2f, Delta=%.3f, Drift=%.3f, ", diff, delta, drift);
   }
   if (ABS (delta) > jumplimit / 2) {
                                  /*delta on part 0 */
-    bestdelta = diff - partdiffs[0] - *drift;
+    bestdelta = diff - partdiffs[0] - drift;
     bestpart = 0;                /*0 best so far */
     for (partition = 1; partition < *partcount; partition++) {
-      delta = diff - partdiffs[partition] - *drift;
+      delta = diff - partdiffs[partition] - drift;
       if (ABS (delta) < ABS (bestdelta)) {
         bestdelta = delta;
         bestpart = partition;    /*part with nearest jump */
@@ -1002,7 +1006,7 @@ int *partcount                   /*no of partitions */
     && *partcount < MAXPARTS) {  /*and spare part left */
       bestpart = (*partcount)++; /*best was new one */
                                  /*start new one */
-      partdiffs[bestpart] = diff - *drift;
+      partdiffs[bestpart] = diff - drift;
       delta = 0.0f;
     }
   }
@@ -1011,11 +1015,11 @@ int *partcount                   /*no of partitions */
   }
 
   if (bestpart == lastpart
-    && (ABS (delta - *lastdelta) < jumplimit / 2
+    && (ABS (delta - lastdelta) < jumplimit / 2
     || ABS (delta) < jumplimit / 2))
                                  /*smooth the drift */
-    *drift = (3 * *drift + delta) / 3;
-  *lastdelta = delta;
+    drift = (3 * drift + delta) / 3;
+  lastdelta = delta;
 
   if (textord_oldbl_debug) {
     tprintf ("P=%d\n", bestpart);

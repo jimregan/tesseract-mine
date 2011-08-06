@@ -21,7 +21,7 @@
 #define           DEBUGWIN_H
 
 #include          "host.h"
-#include          "params.h"
+#include          "varable.h"
 
 #ifdef __MAC__
 #include          <lwindow.h>
@@ -35,7 +35,7 @@
 #define DEBUG_WIN_XSIZE   700    //default size
 #define DEBUG_WIN_YSIZE   300    //default size
 
-// Should remain a global parameter, since this is only used for debug editor.
+//number of lines in the scrollable area of the window
 extern DLLSYM INT_VAR_H (debug_lines, 256, "Number of lines in debug window");
 
 //the API for the debug window is simple, see below.

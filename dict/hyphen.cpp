@@ -24,6 +24,8 @@
 
 #include "dict.h"
 
+INT_VAR(hyphen_debug_level, 0, "Debug level for hyphenated words.");
+
 namespace tesseract {
 
 // Unless the previous word was the last one on the line, and the current
@@ -56,10 +58,7 @@ void Dict::set_hyphen_word(const WERD_CHOICE &word,
   }
   if (hyphen_word_->rating() > word.rating()) {
     *hyphen_word_ = word;
-    // Remove the last unichar id as it is a hyphen, and remove
-    // any unichar_string/lengths that are present.
-    hyphen_word_->remove_last_unichar_id();
-    hyphen_word_->depopulate_unichars();
+    hyphen_word_->remove_last_unichar_id();  // last unichar id is a hyphen
     hyphen_active_dawgs_ = active_dawgs;
     hyphen_constraints_ = constraints;
   }

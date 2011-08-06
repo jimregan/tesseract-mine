@@ -121,3 +121,4 @@ class LineFinder {
 
 #endif  // TESSERACT_TEXTORD_LINEFIND_H__
 
+

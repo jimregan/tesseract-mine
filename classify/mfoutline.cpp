@@ -21,85 +21,246 @@
 #include "clusttool.h"           //If remove you get cought in a loop somewhere
 #include "emalloc.h"
 #include "mfoutline.h"
+#include "hideedge.h"
 #include "blobs.h"
 #include "const.h"
 #include "mfx.h"
-#include "params.h"
-#include "classify.h"
+#include "varable.h"
 
 #include <math.h>
 #include <stdio.h>
 
 #define MIN_INERTIA (0.00001)
 
+/*---------------------------------------------------------------------------
+        Global Data Definitions and Declarations
+----------------------------------------------------------------------------*/
+/* center of current blob being processed - used when "unexpanding"
+  expanded blobs */
+static TPOINT BlobCenter;
+
+/*----------------------------------------------------------------------------
+             Variables
+----------------------------------------------------------------------------*/
+
+/* control knobs used to control normalization of outlines */
+INT_VAR(classify_norm_method, character, "Normalization Method   ...");
+/* PREV DEFAULT "baseline" */
+double_VAR(classify_char_norm_range, 0.2, "Character Normalization Range ...");
+double_VAR(classify_min_norm_scale_x, 0.0, "Min char x-norm scale ...");
+/* PREV DEFAULT 0.1 */
+double_VAR(classify_max_norm_scale_x, 0.325, "Max char x-norm scale ...");
+/* PREV DEFAULT 0.3 */
+double_VAR(classify_min_norm_scale_y, 0.0, "Min char y-norm scale ...");
+/* PREV DEFAULT 0.1 */
+double_VAR(classify_max_norm_scale_y, 0.325, "Max char y-norm scale ...");
+/* PREV DEFAULT 0.3 */
 /*----------------------------------------------------------------------------
               Public Code
 ----------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+void ComputeBlobCenter(TBLOB *Blob, TPOINT *BlobCenter) {
+/*
+ ** Parameters:
+ **   Blob    blob to compute centerpoint of
+ **   BlobCenter  data struct to place results in
+ ** Globals: none
+ ** Operation:
+ **   This routine computes the center point of the specified
+ **   blob using the bounding box of all top level outlines in the
+ **   blob.  The center point is computed in a coordinate system
+ **   which is scaled up by VECSCALE from the page coordinate
+ **   system.
+ ** Return: none
+ ** Exceptions: none
+ ** History: Fri Sep  8 10:45:39 1989, DSJ, Created.
+ */
+  TPOINT TopLeft;
+  TPOINT BottomRight;
+
+  blob_bounding_box(Blob, &TopLeft, &BottomRight);
+
+  BlobCenter->x = ((TopLeft.x << VECSCALE) + (BottomRight.x << VECSCALE)) / 2;
+  BlobCenter->y = ((TopLeft.y << VECSCALE) + (BottomRight.y << VECSCALE)) / 2;
+
+}                                /* ComputeBlobCenter */
+
 
 /*---------------------------------------------------------------------------*/
-// Convert a blob into a list of MFOUTLINEs (float-based microfeature format).
-LIST ConvertBlob(TBLOB *blob) {
-  LIST outlines = NIL_LIST;
-  return (blob == NULL)
-      ? NIL_LIST
-      : ConvertOutlines(blob->outlines, outlines, outer);
-}
+LIST ConvertBlob(TBLOB *Blob) {
+/*
+ ** Parameters:
+ **   Blob  blob to be converted
+ ** Globals: none
+ ** Operation: Convert Blob into a list of outlines.
+ ** Return: List of outlines representing blob.
+ ** Exceptions: none
+ ** History: Thu Dec 13 15:40:17 1990, DSJ, Created.
+ */
+  LIST ConvertedOutlines = NIL;
+
+  if (Blob != NULL) {
+    SettupBlobConversion(Blob);  //ComputeBlobCenter (Blob, &BlobCenter);
+    ConvertedOutlines = ConvertOutlines (Blob->outlines,
+      ConvertedOutlines, outer);
+  }
+
+  return (ConvertedOutlines);
+}                                /* ConvertBlob */
 
 
 /*---------------------------------------------------------------------------*/
-// Convert a TESSLINE into the float-based MFOUTLINE micro-feature format.
-MFOUTLINE ConvertOutline(TESSLINE *outline) {
+MFOUTLINE ConvertOutline(TESSLINE *Outline) {
+/*
+ ** Parameters:
+ **   Outline   outline to be converted
+ ** Globals:
+ **   BlobCenter  pre-computed center of current blob
+ ** Operation:
+ **   This routine converts the specified outline into a special
+ **   data structure which is used for extracting micro-features.
+ **   If the outline has been pre-normalized by the splitter,
+ **   then it is assumed to be in expanded form and all we must
+ **   do is copy the points.  Otherwise,
+ **   if the outline is expanded, then the expanded form is used
+ **   and the coordinates of the points are returned to page
+ **   coordinates using the global variable BlobCenter and the
+ **   scaling factor REALSCALE.  If the outline is not expanded,
+ **   then the compressed form is used.
+ ** Return: Outline converted into special micro-features format.
+ ** Exceptions: none
+ ** History: 8/2/89, DSJ, Created.
+ **   9/8/89, DSJ, Added ability to convert expanded blobs.
+ **   1/11/90, DSJ, Changed to use REALSCALE instead of VECSCALE
+ **         to eliminate round-off problems.
+ **   2/21/91, DSJ, Added ability to work with pre-normalized
+ **         blobs.
+ **   4/30/91, DSJ, Added concept of "hidden" segments.
+ */
+  register BYTEVEC *Vector;
+  TPOINT Position;
+  TPOINT StartPosition;
   MFEDGEPT *NewPoint;
-  MFOUTLINE MFOutline = NIL_LIST;
+  MFOUTLINE MFOutline = NIL;
   EDGEPT *EdgePoint;
   EDGEPT *StartPoint;
   EDGEPT *NextPoint;
 
-  if (outline == NULL || outline->loop == NULL)
-    return MFOutline;
+  if (Outline == NULL ||
+    (Outline->compactloop == NULL && Outline->loop == NULL))
+    return (MFOutline);
 
-  StartPoint = outline->loop;
-  EdgePoint = StartPoint;
-  do {
-    NextPoint = EdgePoint->next;
+                                 /* have outlines been prenormalized */
+  if (classify_baseline_normalized) {
+    StartPoint = Outline->loop;
+    EdgePoint = StartPoint;
+    do {
+      NextPoint = EdgePoint->next;
 
-    /* filter out duplicate points */
-    if (EdgePoint->pos.x != NextPoint->pos.x ||
-        EdgePoint->pos.y != NextPoint->pos.y) {
-      NewPoint = NewEdgePoint();
-      ClearMark(NewPoint);
-      NewPoint->Hidden = EdgePoint->IsHidden();
-      NewPoint->Point.x = EdgePoint->pos.x;
-      NewPoint->Point.y = EdgePoint->pos.y;
-      MFOutline = push(MFOutline, NewPoint);
+      /* filter out duplicate points */
+      if (EdgePoint->pos.x != NextPoint->pos.x ||
+      EdgePoint->pos.y != NextPoint->pos.y) {
+        NewPoint = NewEdgePoint ();
+        ClearMark(NewPoint);
+        NewPoint->Hidden = is_hidden_edge (EdgePoint) ? TRUE : FALSE;
+        NewPoint->Point.x = EdgePoint->pos.x;
+        NewPoint->Point.y = EdgePoint->pos.y;
+        MFOutline = push (MFOutline, NewPoint);
+      }
+      EdgePoint = NextPoint;
     }
-    EdgePoint = NextPoint;
-  } while (EdgePoint != StartPoint);
+    while (EdgePoint != StartPoint);
+  }
+                                 /* use compressed version of outline */
+  else if (Outline->loop == NULL) {
+    Position.x = StartPosition.x = Outline->start.x;
+    Position.y = StartPosition.y = Outline->start.y;
+    Vector = Outline->compactloop;
+    do {
+      if (Vector->dx != 0 || Vector->dy != 0) {
+        NewPoint = NewEdgePoint ();
+        ClearMark(NewPoint);
+                                 /* all edges are visible */
+        NewPoint->Hidden = FALSE;
+        NewPoint->Point.x = Position.x;
+        NewPoint->Point.y = Position.y;
+        MFOutline = push (MFOutline, NewPoint);
+      }
+      Position.x += Vector->dx;
+      Position.y += Vector->dy;
+      Vector++;
+    }
+    while (Position.x != StartPosition.x ||
+      (Position.y != StartPosition.y));
+  }
+  else {                         /* use expanded version of outline */
+    StartPoint = Outline->loop;
+    EdgePoint = StartPoint;
+    do {
+      NextPoint = EdgePoint->next;
+
+      /* filter out duplicate points */
+      if (EdgePoint->pos.x != NextPoint->pos.x ||
+      EdgePoint->pos.y != NextPoint->pos.y) {
+        NewPoint = NewEdgePoint ();
+        ClearMark(NewPoint);
+        NewPoint->Hidden = is_hidden_edge (EdgePoint) ? TRUE : FALSE;
+        NewPoint->Point.x =
+          (EdgePoint->pos.x + BlobCenter.x) / REALSCALE;
+        NewPoint->Point.y =
+          (EdgePoint->pos.y + BlobCenter.y) / REALSCALE;
+        MFOutline = push (MFOutline, NewPoint);
+      }
+      EdgePoint = NextPoint;
+    }
+    while (EdgePoint != StartPoint);
+  }
 
   MakeOutlineCircular(MFOutline);
-  return MFOutline;
-}
+  return (MFOutline);
+
+}                                /* ConvertOutline */
 
 
 /*---------------------------------------------------------------------------*/
-// Convert a tree of outlines to a list of MFOUTLINEs (lists of MFEDGEPTs).
-//
-// Parameters:
-//   outline      first outline to be converted
-//   mf_outlines  list to add converted outlines to
-//   outline_type  are the outlines outer or holes?
-LIST ConvertOutlines(TESSLINE *outline,
-                     LIST mf_outlines,
-                     OUTLINETYPE outline_type) {
-  MFOUTLINE mf_outline;
+LIST ConvertOutlines(TESSLINE *Outline,
+                     LIST ConvertedOutlines,
+                     OUTLINETYPE OutlineType) {
+/*
+ ** Parameters:
+ **   Outline     first outline to be converted
+ **   ConvertedOutlines list to add converted outlines to
+ **   OutlineType   are the outlines outer or holes?
+ ** Globals: none
+ ** Operation:
+ **              This routine converts all given outlines into a new format.
+ **              of outlines.  Outline points to a list of the top level
+ **   outlines to be converted.  The children of these outlines
+ **   are also recursively converted.  All converted outlines
+ **   are added to ConvertedOutlines.  This is a list of outlines,
+ **   one for each outline that was converted.
+ ** Return: Updated list of converted outlines.
+ ** Exceptions: none
+ ** History: Thu Dec 13 15:57:38 1990, DSJ, Created.
+ */
+  MFOUTLINE MFOutline;
 
-  while (outline != NULL) {
-    mf_outline = ConvertOutline(outline);
-    mf_outlines = push(mf_outlines, mf_outline);
-    outline = outline->next;
+  while (Outline != NULL) {
+    if (Outline->child != NULL) {
+      if (OutlineType == outer)
+        ConvertedOutlines = ConvertOutlines (Outline->child,
+          ConvertedOutlines, hole);
+      else
+        ConvertedOutlines = ConvertOutlines (Outline->child,
+          ConvertedOutlines, outer);
+    }
+
+    MFOutline = ConvertOutline (Outline);
+    ConvertedOutlines = push (ConvertedOutlines, MFOutline);
+    Outline = Outline->next;
   }
-  return mf_outlines;
-}
+  return (ConvertedOutlines);
+}                                /* ConvertOutlines */
 
 
 /*---------------------------------------------------------------------------*/
@@ -149,6 +310,71 @@ void ComputeOutlineStats(LIST Outlines, OUTLINE_STATS *OutlineStats) {
   FinishOutlineStats(OutlineStats);
 
 }                                /* ComputeOutlineStats */
+
+
+/*---------------------------------------------------------------------------*/
+void FilterEdgeNoise(MFOUTLINE Outline, FLOAT32 NoiseSegmentLength) {
+/*
+ ** Parameters:
+ **   Outline   outline to be filtered
+ **   NoiseSegmentLength  maximum length of a "noise" segment
+ ** Globals: none
+ ** Operation: Filter out noise from the specified outline.  This is
+ **   done by changing the direction of short segments of the
+ **   outline to the same direction as the preceding outline
+ **   segment.
+ ** Return: none
+ ** Exceptions: none
+ ** History: Fri May  4 10:23:45 1990, DSJ, Created.
+ */
+  MFOUTLINE Current;
+  MFOUTLINE Last;
+  MFOUTLINE First;
+  FLOAT32 Length;
+  int NumFound = 0;
+  DIRECTION DirectionOfFirst = north;
+
+  if (DegenerateOutline (Outline))
+    return;
+
+  /* find 2 segments of different orientation which are long enough to
+     not be filtered.  If two cannot be found, leave the outline unchanged. */
+  First = NextDirectionChange (Outline);
+  Last = First;
+  do {
+    Current = NextDirectionChange (Last);
+    Length = DistanceBetween ((PointAt (Current)->Point),
+      PointAt (Last)->Point);
+    if (Length >= NoiseSegmentLength) {
+      if (NumFound == 0) {
+        NumFound = 1;
+        DirectionOfFirst = PointAt (Last)->Direction;
+      }
+      else if (DirectionOfFirst != PointAt (Last)->Direction)
+        break;
+    }
+    Last = Current;
+  }
+  while (Last != First);
+  if (Current == Last)
+    return;
+
+  /* find each segment and filter it out if it is too short.  Note that
+     the above code guarantees that the initial direction change will
+     not be removed, therefore the loop will terminate. */
+  First = Last;
+  do {
+    Current = NextDirectionChange (Last);
+    Length = DistanceBetween (PointAt (Current)->Point,
+      PointAt (Last)->Point);
+    if (Length < NoiseSegmentLength)
+      ChangeDirection (Last, Current, PointAt (Last)->PreviousDirection);
+
+    Last = Current;
+  }
+  while (Last != First);
+
+}                                /* FilterEdgeNoise */
 
 
 /*---------------------------------------------------------------------------*/
@@ -211,8 +437,8 @@ void FreeMFOutline(void *arg) {  //MFOUTLINE                             Outline
   MFOUTLINE Outline = (MFOUTLINE) arg;
 
   /* break the circular outline so we can use std. techniques to deallocate */
-  Start = list_rest (Outline);
-  set_rest(Outline, NIL_LIST);
+  Start = rest (Outline);
+  set_rest(Outline, NIL);
   while (Start != NULL) {
     free_struct (first_node (Start), sizeof (MFEDGEPT), "MFEDGEPT");
     Start = pop (Start);
@@ -275,10 +501,20 @@ void MarkDirectionChanges(MFOUTLINE Outline) {
 
 
 /*---------------------------------------------------------------------------*/
-// Return a new edge point for a micro-feature outline.
 MFEDGEPT *NewEdgePoint() {
-  return ((MFEDGEPT *) alloc_struct(sizeof(MFEDGEPT), "MFEDGEPT"));
-}
+/*
+ ** Parameters: none
+ ** Globals: none
+ ** Operation:
+ **   This routine allocates and returns a new edge point for
+ **   a micro-feature outline.
+ ** Return: New edge point.
+ ** Exceptions: none
+ ** History: 7/21/89, DSJ, Created.
+ */
+  return ((MFEDGEPT *) alloc_struct (sizeof (MFEDGEPT), "MFEDGEPT"));
+
+}                                /* NewEdgePoint */
 
 
 /*---------------------------------------------------------------------------*/
@@ -297,9 +533,9 @@ MFOUTLINE NextExtremity(MFOUTLINE EdgePoint) {
  ** Exceptions: none
  ** History: 7/26/89, DSJ, Created.
  */
-  EdgePoint = NextPointAfter(EdgePoint);
-  while (!PointAt(EdgePoint)->ExtremityMark)
-    EdgePoint = NextPointAfter(EdgePoint);
+  EdgePoint = NextPointAfter (EdgePoint);
+  while (!PointAt (EdgePoint)->ExtremityMark)
+    EdgePoint = NextPointAfter (EdgePoint);
 
   return (EdgePoint);
 
@@ -308,10 +544,12 @@ MFOUTLINE NextExtremity(MFOUTLINE EdgePoint) {
 
 /*---------------------------------------------------------------------------*/
 void NormalizeOutline(MFOUTLINE Outline,
+                      LINE_STATS *LineStats,
                       FLOAT32 XOrigin) {
 /*
  ** Parameters:
  **   Outline   outline to be normalized
+ **   LineStats statistics for text line normalization
  **   XOrigin   x-origin of text
  ** Globals: none
  ** Operation:
@@ -325,28 +563,55 @@ void NormalizeOutline(MFOUTLINE Outline,
  ** Return: none
  ** Exceptions: none
  ** History: 8/2/89, DSJ, Created.
+ **   10/23/89, DSJ, Added ascender/descender stretching.
+ **   11/89, DSJ, Removed ascender/descender stretching.
  */
-  if (Outline == NIL_LIST)
-    return;
+  MFEDGEPT *Current;
+  MFOUTLINE EdgePoint;
+  FLOAT32 ScaleFactor;
+  FLOAT32 AscStretch;
+  FLOAT32 DescStretch;
 
-  MFOUTLINE EdgePoint = Outline;
-  do {
-    MFEDGEPT *Current = PointAt(EdgePoint);
-    Current->Point.y = MF_SCALE_FACTOR * (Current->Point.y - BASELINE_OFFSET);
-    Current->Point.x = MF_SCALE_FACTOR * (Current->Point.x - XOrigin);
-    EdgePoint = NextPointAfter(EdgePoint);
-  } while (EdgePoint != Outline);
+  if (Outline != NIL) {
+    ScaleFactor = ComputeScaleFactor (LineStats);
+    AscStretch = 1.0;
+    DescStretch = 1.0;
+
+    EdgePoint = Outline;
+    do {
+      Current = PointAt (EdgePoint);
+
+      Current->Point.y = ScaleFactor *
+        (Current->Point.y -
+        BaselineAt (LineStats, XPositionOf (Current)));
+
+      if (Current->Point.y > NORMAL_X_HEIGHT)
+        Current->Point.y = NORMAL_X_HEIGHT +
+          (Current->Point.y - NORMAL_X_HEIGHT) / AscStretch;
+
+      else if (Current->Point.y < NORMAL_BASELINE)
+        Current->Point.y = NORMAL_BASELINE +
+            (Current->Point.y - NORMAL_BASELINE) / DescStretch;
+
+      Current->Point.x = ScaleFactor *
+        (Current->Point.x - XOrigin);
+
+      EdgePoint = NextPointAfter (EdgePoint);
+    }
+    while (EdgePoint != Outline);
+  }
 }                                /* NormalizeOutline */
 
 
 /*---------------------------------------------------------------------------*/
-namespace tesseract {
-void Classify::NormalizeOutlines(LIST Outlines,
-                                 FLOAT32 *XScale,
-                                 FLOAT32 *YScale) {
+void NormalizeOutlines(LIST Outlines,
+                       LINE_STATS *LineStats,
+                       FLOAT32 *XScale,
+                       FLOAT32 *YScale) {
 /*
  ** Parameters:
  **   Outlines  list of outlines to be normalized
+ **   LineStats statistics for text line normalization
  **   XScale    x-direction scale factor used by routine
  **   YScale    y-direction scale factor used by routine
  ** Globals:
@@ -372,7 +637,7 @@ void Classify::NormalizeOutlines(LIST Outlines,
 
       /* limit scale factor to avoid overscaling small blobs (.,`'),
          thin blobs (l1ift), and merged blobs */
-      *XScale = *YScale = BaselineScale = MF_SCALE_FACTOR;
+      *XScale = *YScale = BaselineScale = ComputeScaleFactor (LineStats);
       *XScale *= OutlineStats.Ry;
       *YScale *= OutlineStats.Rx;
       if (*XScale < classify_min_norm_scale_x)
@@ -395,14 +660,33 @@ void Classify::NormalizeOutlines(LIST Outlines,
 
     case baseline:
       iterate(Outlines) {
-        Outline = (MFOUTLINE) first_node(Outlines);
-        NormalizeOutline(Outline, 0.0);
+        Outline = (MFOUTLINE) first_node (Outlines);
+        NormalizeOutline (Outline, LineStats, 0.0);
       }
-      *XScale = *YScale = MF_SCALE_FACTOR;
+      *XScale = *YScale = ComputeScaleFactor (LineStats);
       break;
   }
 }                                /* NormalizeOutlines */
-}  // namespace tesseract
+
+
+/*---------------------------------------------------------------------------*/
+void SettupBlobConversion(TBLOB *Blob) {
+/*
+ ** Parameters:
+ **   Blob    blob that is to be converted
+ ** Globals:
+ **   BlobCenter  center of blob to be converted
+ ** Operation: Compute the center of the blob's bounding box and save
+ **   it in a global variable.  This routine must be called before
+ **   any calls to ConvertOutline.  It must be called once per
+ **   blob.
+ ** Return: none
+ ** Exceptions: none
+ ** History: Thu May 17 11:06:17 1990, DSJ, Created.
+ */
+  ComputeBlobCenter(Blob, &BlobCenter);
+}                                /* SettupBlobConversion */
+
 
 /*---------------------------------------------------------------------------*/
 void SmearExtremities(MFOUTLINE Outline, FLOAT32 XScale, FLOAT32 YScale) {
@@ -430,7 +714,7 @@ void SmearExtremities(MFOUTLINE Outline, FLOAT32 XScale, FLOAT32 YScale) {
   FLOAT32 MinYSmear;
   FLOAT32 MaxYSmear;
 
-  if (Outline != NIL_LIST) {
+  if (Outline != NIL) {
     MinXSmear = -0.5 * XScale;
     MaxXSmear = 0.5 * XScale;
     MinYSmear = -0.5 * YScale;
@@ -503,7 +787,7 @@ void CharNormalizeOutline(MFOUTLINE Outline,
   MFOUTLINE First, Current;
   MFEDGEPT *CurrentPoint;
 
-  if (Outline == NIL_LIST)
+  if (Outline == NIL)
     return;
 
   First = Outline;
@@ -682,13 +966,9 @@ MFOUTLINE NextDirectionChange(MFOUTLINE EdgePoint) {
 
   InitialDirection = PointAt (EdgePoint)->Direction;
 
-  MFOUTLINE next_pt = NULL;
-  do {
-    EdgePoint = NextPointAfter(EdgePoint);
-    next_pt = NextPointAfter(EdgePoint);
-  } while (PointAt(EdgePoint)->Direction == InitialDirection &&
-           !PointAt(EdgePoint)->Hidden &&
-           next_pt != NULL && !PointAt(next_pt)->Hidden);
+  do
+  EdgePoint = NextPointAfter (EdgePoint);
+  while (PointAt (EdgePoint)->Direction == InitialDirection);
 
   return (EdgePoint);
 }                                /* NextDirectionChange */

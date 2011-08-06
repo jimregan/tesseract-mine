@@ -7,8 +7,8 @@
 # ----------------------------------------
 
 AC_PREREQ(2.50)
-AC_INIT([tesseract], [3.01], [theraysmith@gmail.com])
 AC_CONFIG_MACRO_DIR([m4])
+AC_INIT(tesseract, 3.00, theraysmith@gmail.com)
 AC_REVISION($Id: configure.ac,v 1.4 2007/02/02 22:38:17 theraysmith Exp $)
 AC_CONFIG_AUX_DIR(config)
 AC_CONFIG_SRCDIR(api/tesseractmain.cpp)
@@ -18,8 +18,8 @@ AC_CANONICAL_HOST
 # Define date of package, etc. Could be useful in auto-generated
 # documentation.
 # TODO(luc) Generate good documentation using doxygen or equivalent
-PACKAGE_YEAR=2011
-PACKAGE_DATE="05/24"
+PACKAGE_YEAR=2010
+PACKAGE_DATE="09/30"
 
 AC_DEFINE_UNQUOTED(PACKAGE_NAME,["${PACKAGE_NAME}"],[Name of package])
 AC_DEFINE_UNQUOTED(PACKAGE_VERSION,["${PACKAGE_VERSION}"],[Version number])
@@ -35,7 +35,7 @@ GENERIC_LIBRARY_NAME=tesseract
 
 # Release versioning
 GENERIC_MAJOR_VERSION=3
-GENERIC_MINOR_VERSION=1
+GENERIC_MINOR_VERSION=0
 GENERIC_MICRO_VERSION=0
 
 # API version (often = GENERIC_MAJOR_VERSION.GENERIC_MINOR_VERSION)
@@ -322,21 +322,14 @@ AC_CHECK_FUNCS(acos asin)
 # [ no_jpeg=yes
 #   AC_MSG_WARN([JPEG support is disabled]) ])
 
-dnl ------------------------------------------------------------
-dnl check for libtiff
-dnl ------------------------------------------------------------
-AC_CHECK_LIB(tiff, TIFFReadScanline)
-AC_CHECK_HEADER(tiffio.h,LIBTIFF='yes',AC_MSG_WARN([TIFF support is disabled]))
+# Search LIBTIFF library
+AC_PATH_LIBTIFF(,
+[ no_libtiff=yes
+  AC_MSG_WARN([TIFF support is disabled]) ])
 
 # Check location of leptonica/liblept headers.
-AC_MSG_CHECKING(for leptonica)
-AC_ARG_VAR(LIBLEPT_HEADERSDIR,[Leptonica headers directory])
-
 have_lept=no
-if test "$LIBLEPT_HEADERSDIR" = "" ; then
-  LIBLEPT_HEADERSDIR="/usr/local/include /usr/include"
-fi
-for incd in $LIBLEPT_HEADERSDIR
+for incd in /usr/local/include /usr/include
 do
   for lept in . leptonica liblept
   do
@@ -347,11 +340,9 @@ do
   done
 done
 if test "$have_lept" = yes ; then
-  AC_MSG_RESULT(yes)
-  AC_CHECK_LIB(lept,pixCreate,[], AC_MSG_ERROR([leptonica library missing]))
-else
-  AC_MSG_ERROR([leptonica not found])
+AC_CHECK_LIB(lept,pixCreate)
 fi
+
 
 # ----------------------------------------
 # Final Tasks and Output
@@ -372,11 +363,9 @@ AC_CONFIG_FILES(ccmain/Makefile)
 AC_CONFIG_FILES(ccstruct/Makefile)
 AC_CONFIG_FILES(ccutil/Makefile)
 AC_CONFIG_FILES(classify/Makefile)
-AC_CONFIG_FILES(cube/Makefile)
 AC_CONFIG_FILES(cutil/Makefile)
 AC_CONFIG_FILES(dict/Makefile)
 AC_CONFIG_FILES(image/Makefile)
-AC_CONFIG_FILES(neural_networks/runtime/Makefile)
 AC_CONFIG_FILES(textord/Makefile)
 AC_CONFIG_FILES(viewer/Makefile)
 AC_CONFIG_FILES(wordrec/Makefile)
@@ -385,6 +374,10 @@ AC_CONFIG_FILES(tessdata/Makefile)
 AC_CONFIG_FILES(tessdata/configs/Makefile)
 AC_CONFIG_FILES(tessdata/tessconfigs/Makefile)
 AC_CONFIG_FILES(testing/Makefile)
+AC_CONFIG_FILES(vs2008/Makefile)
+AC_CONFIG_FILES(vs2008/dlltest/Makefile)
+AC_CONFIG_FILES(vs2008/include/Makefile)
+AC_CONFIG_FILES(vs2008/include/leptonica/Makefile)
 if test "$enable_graphics" = "yes"; then
 AC_CONFIG_FILES(java/Makefile)
 AC_CONFIG_FILES(java/com/Makefile)

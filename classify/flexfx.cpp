@@ -28,12 +28,11 @@
               Public Code
 ----------------------------------------------------------------------------**/
 /*---------------------------------------------------------------------------*/
-CHAR_DESC ExtractFlexFeatures(const FEATURE_DEFS_STRUCT &FeatureDefs,
-                              TBLOB *Blob, const DENORM& denorm) {
+CHAR_DESC ExtractFlexFeatures(TBLOB *Blob, LINE_STATS *LineStats) {
 /*
  **	Parameters:
  **		Blob		blob to extract features from
- **		denorm  control parameter for feature extractor
+ **		LineStats	statistics about text line Blob is on
  **	Globals: none
  **	Operation: Allocate a new character descriptor and fill it in by
  **		calling all feature extractors which are enabled.
@@ -44,13 +43,13 @@ CHAR_DESC ExtractFlexFeatures(const FEATURE_DEFS_STRUCT &FeatureDefs,
   int Type;
   CHAR_DESC CharDesc;
 
-  CharDesc = NewCharDescription(FeatureDefs);
+  CharDesc = NewCharDescription ();
 
   for (Type = 0; Type < CharDesc->NumFeatureSets; Type++)
     if (FeatureDefs.FeatureExtractors[Type] != NULL &&
         FeatureDefs.FeatureExtractors[Type]->Extractor != NULL) {
       CharDesc->FeatureSets[Type] =
-        (FeatureDefs.FeatureExtractors[Type])->Extractor(Blob, denorm);
+        (FeatureDefs.FeatureExtractors[Type])->Extractor(Blob, LineStats);
       if (CharDesc->FeatureSets[Type] == NULL) {
         FreeCharDescription(CharDesc);
         return NULL;

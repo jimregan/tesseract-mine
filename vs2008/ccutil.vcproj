@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="Windows-1252"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="9.00"
+	Version="9,00"
 	Name="ccutil"
 	ProjectGUID="{DF2FA86F-A663-4805-AED7-2F81D9EAC796}"
 	RootNamespace="ccutil"
@@ -19,7 +19,7 @@
 		<Configuration
 			Name="Debug|Win32"
 			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="$(ConfigurationName)\$(ProjectName)"
+			IntermediateDirectory="$(ConfigurationName)"
 			ConfigurationType="4"
 			CharacterSet="2"
 			>
@@ -41,7 +41,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="..\vs2008\include;..\vs2008\port"
+				AdditionalIncludeDirectories="..\vs2008\include"
 				PreprocessorDefinitions="WIN32;_DEBUG;_LIB;__MSW32__;_CRT_SECURE_NO_WARNINGS"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -81,7 +81,7 @@
 		<Configuration
 			Name="Release|Win32"
 			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="$(ConfigurationName)\$(ProjectName)"
+			IntermediateDirectory="$(ConfigurationName)"
 			ConfigurationType="4"
 			CharacterSet="2"
 			WholeProgramOptimization="1"
@@ -106,7 +106,7 @@
 				AdditionalOptions="/wd4244 /wd4018 /wd4305 /wd4800 /wd4996"
 				Optimization="2"
 				EnableIntrinsicFunctions="true"
-				AdditionalIncludeDirectories="..\vs2008\include;..\vs2008\port"
+				AdditionalIncludeDirectories="..\vs2008\include"
 				PreprocessorDefinitions="WIN32;NDEBUG;_LIB;__MSW32__;_CRT_SECURE_NO_WARNINGS"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
@@ -145,7 +145,7 @@
 		<Configuration
 			Name="Release.dynamic|Win32"
 			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="$(ConfigurationName)\$(ProjectName)"
+			IntermediateDirectory="$(ConfigurationName)"
 			ConfigurationType="4"
 			CharacterSet="2"
 			WholeProgramOptimization="1"
@@ -170,7 +170,7 @@
 				AdditionalOptions="/wd4244 /wd4018 /wd4305 /wd4800 /wd4996"
 				Optimization="2"
 				EnableIntrinsicFunctions="true"
-				AdditionalIncludeDirectories="..\vs2008\include;..\vs2008\port"
+				AdditionalIncludeDirectories="..\vs2008\include"
 				PreprocessorDefinitions="WIN32;NDEBUG;_LIB;__MSW32__;_CRT_SECURE_NO_WARNINGS"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
@@ -658,8 +658,35 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="..\ccutil\params.cpp"
+				RelativePath="..\ccutil\ocrshell.cpp"
 				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						UsePrecompiledHeader="2"
+						PrecompiledHeaderThrough="mfcpch.h"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						UsePrecompiledHeader="2"
+						PrecompiledHeaderThrough="mfcpch.h"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release.dynamic|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						UsePrecompiledHeader="2"
+						PrecompiledHeaderThrough="mfcpch.h"
+					/>
+				</FileConfiguration>
 			</File>
 			<File
 				RelativePath="..\ccutil\serialis.cpp"
@@ -728,6 +755,41 @@
 				>
 			</File>
 			<File
+				RelativePath="..\ccutil\tessopt.cpp"
+				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						UsePrecompiledHeader="2"
+						PrecompiledHeaderThrough="mfcpch.h"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						UsePrecompiledHeader="2"
+						PrecompiledHeaderThrough="mfcpch.h"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release.dynamic|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						UsePrecompiledHeader="2"
+						PrecompiledHeaderThrough="mfcpch.h"
+					/>
+				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\ccutil\tordvars.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\ccutil\tprintf.cpp"
 				>
 				<FileConfiguration
@@ -770,6 +832,37 @@
 				RelativePath="..\ccutil\unicharset.cpp"
 				>
 			</File>
+			<File
+				RelativePath="..\ccutil\varable.cpp"
+				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						UsePrecompiledHeader="2"
+						PrecompiledHeaderThrough="mfcpch.h"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						UsePrecompiledHeader="2"
+						PrecompiledHeaderThrough="mfcpch.h"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release.dynamic|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						UsePrecompiledHeader="2"
+						PrecompiledHeaderThrough="mfcpch.h"
+					/>
+				</FileConfiguration>
+			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
@@ -790,6 +883,10 @@
 			</File>
 			<File
 				RelativePath="..\ccutil\boxread.h"
+				>
+			</File>
+			<File
+				RelativePath="..\ccutil\callback.h"
 				>
 			</File>
 			<File
@@ -822,10 +919,6 @@
 			</File>
 			<File
 				RelativePath="..\ccutil\genericvector.h"
-				>
-			</File>
-			<File
-				RelativePath=".\port\gettimeofday.h"
 				>
 			</File>
 			<File
@@ -893,19 +986,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\ccutil\params.h"
-				>
-			</File>
-			<File
 				RelativePath="..\ccutil\platform.h"
 				>
 			</File>
 			<File
 				RelativePath="..\ccutil\qrsequence.h"
-				>
-			</File>
-			<File
-				RelativePath="..\ccutil\scanutils.h"
 				>
 			</File>
 			<File
@@ -958,6 +1043,10 @@
 			</File>
 			<File
 				RelativePath="..\ccutil\unicity_table.h"
+				>
+			</File>
+			<File
+				RelativePath="..\ccutil\varable.h"
 				>
 			</File>
 		</Filter>

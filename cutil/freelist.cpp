@@ -17,6 +17,8 @@
 #include "memry.h"
 #include "tprintf.h"
 
+static int mem_alloc_counter = 0;
+
 
 /**********************************************************************
  * memalloc
@@ -24,6 +26,7 @@
  * Memory allocator with protection.
  **********************************************************************/
 int *memalloc(int size) {
+  mem_alloc_counter++;
   return ((int *) alloc_mem (size));
 }
 
@@ -53,6 +56,11 @@ int *memrealloc(void *ptr, int size, int oldsize) {
 void memfree(void *element) {
   if (element) {
     free_mem(element);
+    mem_alloc_counter--;
+  }
+  else {
+    tprintf ("%d MEM_ALLOC's used\n", mem_alloc_counter);
+    DoError (0, "Memfree of NULL pointer");
   }
 }
 

@@ -33,6 +33,10 @@ typedef enum {
 } OUTLINE_FEAT_PARAM_NAME;
 
 #define MAX_OUTLINE_FEATURES  (100)
+/**----------------------------------------------------------------------------
+          Public Function Prototypes
+----------------------------------------------------------------------------**/
+FEATURE_SET ExtractOutlineFeatures(TBLOB *Blob, LINE_STATS *LineStats);
 
 /*---------------------------------------------------------------------------
           Privat Function Prototypes
@@ -45,4 +49,8 @@ void ConvertToOutlineFeatures(MFOUTLINE Outline, FEATURE_SET FeatureSet);
 
 void NormalizeOutlineX(FEATURE_SET FeatureSet);
 
+/**----------------------------------------------------------------------------
+        Global Data Definitions and Declarations
+----------------------------------------------------------------------------**/
+extern FEATURE_DESC_STRUCT OutlineFeatDesc;
 #endif

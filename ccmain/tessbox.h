@@ -24,6 +24,13 @@
 #include          "notdll.h"
 #include "tesseractclass.h"
 
-// TODO(ocr-team): Delete this along with other empty header files.
-
+void tess_training_tester(
+                          const STRING& filename,
+                          PBLOB *blob,
+                          DENORM *denorm,
+                          BOOL8 correct,
+                          char *text,
+                          inT32 count,
+                          BLOB_CHOICE_LIST *ratings
+                         );
 #endif

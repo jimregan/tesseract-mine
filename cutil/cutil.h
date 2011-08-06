@@ -40,7 +40,7 @@ Import original HP distribution
 #include <string.h>
 #include <stdlib.h>
 
-#include "host.h"
+#include "general.h"
 #include "tprintf.h"
 
 /*----------------------------------------------------------------------

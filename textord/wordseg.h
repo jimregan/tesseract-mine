@@ -20,10 +20,9 @@
 #ifndef           WORDSEG_H
 #define           WORDSEG_H
 
-#include          "params.h"
+#include          "varable.h"
 #include          "blobbox.h"
 #include          "notdll.h"
-#include          "textord.h"
 
 namespace tesseract {
 class Tesseract;
@@ -36,11 +35,14 @@ extern BOOL_VAR_H (textord_chopper_test, FALSE,
                    "Chopper is being tested.");
 
 void make_single_word(bool one_blob, TO_ROW_LIST *rows, ROW_LIST* real_rows);
-void make_words(tesseract::Textord *textord,
-                ICOORD page_tr,                // top right
-                float gradient,               // page skew
-                BLOCK_LIST *blocks,           // block list
-                TO_BLOCK_LIST *port_blocks);  // output list
+void make_words(                             //make words
+                ICOORD page_tr,              //top right
+                float gradient,              //page skew
+                BLOCK_LIST *blocks,          //block list
+                TO_BLOCK_LIST *land_blocks,  //rotated for landscape
+                TO_BLOCK_LIST *port_blocks,  //output list
+                tesseract::Tesseract*
+               );
 void set_row_spaces(                  //find space sizes
                     TO_BLOCK *block,  //block to do
                     FCOORD rotation,  //for drawing
@@ -60,8 +62,7 @@ inT32 row_words2(                  //compute space size
                  FCOORD rotation,  //for drawing
                  BOOL8 testing_on  //for debug
                 );
-void make_real_words(
-                     tesseract::Textord *textord,
+void make_real_words(                  //find lines
                      TO_BLOCK *block,  //block to do
                      FCOORD rotation   //for drawing
                     );
@@ -73,6 +74,9 @@ WERD *make_real_word(                      //make a WERD
                      BLOBNBOX_IT *box_it,  //iterator
                      inT32 blobcount,      //no of blobs to use
                      BOOL8 bol,            //start of line
+                     BOOL8 fuzzy_sp,       //fuzzy space
+                     BOOL8 fuzzy_non,      //fuzzy non-space
                      uinT8 blanks          //no of blanks
                     );
 #endif
+

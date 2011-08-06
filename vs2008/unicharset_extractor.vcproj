@@ -19,7 +19,7 @@
 		<Configuration
 			Name="Release|Win32"
 			OutputDirectory=".."
-			IntermediateDirectory="$(ConfigurationName)\$(ProjectName)"
+			IntermediateDirectory=".\uce.Release"
 			ConfigurationType="1"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
 			UseOfMFC="0"
@@ -54,6 +54,10 @@
 				StringPooling="true"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
+				PrecompiledHeaderFile=".\uce.Release/unicharset_extractor.pch"
+				AssemblerListingLocation=".\uce.Release/"
+				ObjectFile=".\uce.Release/"
+				ProgramDataBaseFileName=".\uce.Release/"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
 			/>
@@ -109,7 +113,7 @@
 		<Configuration
 			Name="Debug|Win32"
 			OutputDirectory=".\bin.dbg"
-			IntermediateDirectory="$(ConfigurationName)\$(ProjectName)"
+			IntermediateDirectory=".\uce.Debug"
 			ConfigurationType="1"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
 			UseOfMFC="0"
@@ -141,6 +145,10 @@
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
+				PrecompiledHeaderFile=".\uce.Debug/unicharset_extractor.pch"
+				AssemblerListingLocation=".\uce.Debug/"
+				ObjectFile=".\uce.Debug/"
+				ProgramDataBaseFileName=".\uce.Debug/"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
 				DebugInformationFormat="4"
@@ -196,7 +204,7 @@
 		<Configuration
 			Name="Release.dynamic|Win32"
 			OutputDirectory="$(ConfigurationName)"
-			IntermediateDirectory="$(ConfigurationName)\$(ProjectName)"
+			IntermediateDirectory="$(ConfigurationName)"
 			ConfigurationType="1"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
 			UseOfMFC="0"
@@ -231,6 +239,10 @@
 				StringPooling="true"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
+				PrecompiledHeaderFile=".\uce.rd/unicharset_extractor.pch"
+				AssemblerListingLocation=".\uce.rd/"
+				ObjectFile=".\uce.Release/"
+				ProgramDataBaseFileName=".\uce.rd/"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
 			/>
@@ -421,6 +433,10 @@
 			</File>
 			<File
 				RelativePath="..\ccutil\nwmain.h"
+				>
+			</File>
+			<File
+				RelativePath="..\ccutil\ocrclass.h"
 				>
 			</File>
 			<File
