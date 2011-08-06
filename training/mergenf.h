@@ -78,8 +78,8 @@ FLOAT32 SubfeatureEvidence (
    FEATURE     Feature,
    PROTO       Proto);
 
-double EvidenceOf (
-  register double   Similarity);
+FLOAT32 EvidenceOf (
+  register FLOAT32   Similarity);
 
 BOOL8 DummyFastMatch (
      FEATURE	Feature,
@@ -95,3 +95,5 @@ BOOL8 PointInside (
      FRECT	*Rectangle,
      FLOAT32	X,
 	 FLOAT32	Y);
+
+extern FEATURE_DESC_STRUCT	PicoFeatDesc;

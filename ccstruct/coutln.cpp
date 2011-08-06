@@ -18,19 +18,18 @@
  **********************************************************************/
 
 #include "mfcpch.h"
-#include <string.h>
+#include          <string.h>
 #ifdef __UNIX__
-#include <assert.h>
+#include          <assert.h>
 #endif
-#include "coutln.h"
-#include "allheaders.h"
+#include          "coutln.h"
 
 // Include automatically generated configuration file if running autoconf.
 #ifdef HAVE_CONFIG_H
 #include "config_auto.h"
 #endif
 
-ELISTIZE (C_OUTLINE)
+ELISTIZE_S (C_OUTLINE)
 ICOORD C_OUTLINE::step_coords[4] = {
   ICOORD (-1, 0), ICOORD (0, -1), ICOORD (1, 0), ICOORD (0, 1)
 };
@@ -621,23 +620,6 @@ void C_OUTLINE::RemoveSmallRecursive(int min_size, C_OUTLINE_IT* it) {
   }
 }
 
-// Renders the outline to the given pix, with left and top being
-// the coords of the upper-left corner of the pix.
-void C_OUTLINE::render(int left, int top, Pix* pix) {
-  ICOORD pos = start;
-  for (int stepindex = 0; stepindex < stepcount; ++stepindex) {
-    ICOORD next_step = step(stepindex);
-    if (next_step.y() < 0) {
-      pixRasterop(pix, 0, top - pos.y(), pos.x() - left, 1,
-                  PIX_NOT(PIX_DST), NULL, 0, 0);
-    } else if (next_step.y() > 0) {
-      pixRasterop(pix, 0, top - pos.y() - 1, pos.x() - left, 1,
-                  PIX_NOT(PIX_DST), NULL, 0, 0);
-    }
-    pos += next_step;
-  }
-}
-
 /**********************************************************************
  * C_OUTLINE::plot
  *
@@ -646,14 +628,15 @@ void C_OUTLINE::render(int left, int top, Pix* pix) {
 
 #ifndef GRAPHICS_DISABLED
 void C_OUTLINE::plot(                //draw it
-                     ScrollView* window,       // window to draw in
-                     ScrollView::Color colour  // colour to draw in
+                     ScrollView* window,  //window to draw in
+                     ScrollView::Color colour   //colour to draw in
                     ) const {
-  inT16 stepindex;               // index to cstep
-  ICOORD pos;                    // current position
-  DIR128 stepdir;                // direction of step
+  inT16 stepindex;               //index to cstep
+  ICOORD pos;                    //current position
+  DIR128 stepdir;                //direction of step
+  DIR128 oldstepdir;             //previous stepdir
 
-  pos = start;                   // current position
+  pos = start;                   //current position
   window->Pen(colour);
   if (stepcount == 0) {
     window->Rectangle(box.left(), box.top(), box.right(), box.bottom());
@@ -662,17 +645,19 @@ void C_OUTLINE::plot(                //draw it
   window->SetCursor(pos.x(), pos.y());
 
   stepindex = 0;
+  stepdir = step_dir (0);        //get direction
   while (stepindex < stepcount) {
-    pos += step(stepindex);    // step to next
-    stepdir = step_dir(stepindex);
-    stepindex++;               // count steps
-    // merge straight lines
-    while (stepindex < stepcount &&
-           stepdir.get_dir() == step_dir(stepindex).get_dir()) {
-      pos += step(stepindex);
-      stepindex++;
+    do {
+      pos += step (stepindex);   //step to next
+      stepindex++;               //count steps
+      oldstepdir = stepdir;
+                                 //new direction
+      stepdir = step_dir (stepindex);
     }
-    window->DrawTo(pos.x(), pos.y());
+    while (stepindex < stepcount
+      && oldstepdir.get_dir () == stepdir.get_dir ());
+    //merge straight lines
+     window->DrawTo(pos.x(), pos.y());
   }
 }
 #endif

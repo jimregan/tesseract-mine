@@ -1,18 +1,18 @@
 /******************************************************************************
-**  Filename:  mftraining.c
-**  Purpose:  Separates training pages into files for each character.
-**        Strips from files only the features and there parameters of
-        the feature type mf.
-**  Author:    Dan Johnson
-**  Revisment:  Christy Russon
-**  Environment: HPUX 6.5
-**  Library:     HPUX 6.5
-**  History:     Fri Aug 18 08:53:50 1989, DSJ, Created.
-**         5/25/90, DSJ, Adapted to multiple feature types.
-**        Tuesday, May 17, 1998 Changes made to make feature specific and
-**        simplify structures. First step in simplifying training process.
+**	Filename:	mftraining.c
+**	Purpose:	Separates training pages into files for each character.
+**				Strips from files only the features and there parameters of
+				the feature type mf.
+**	Author:		Dan Johnson
+**	Revisment:	Christy Russon
+**	Environment: HPUX 6.5
+**	Library:     HPUX 6.5
+**	History:     Fri Aug 18 08:53:50 1989, DSJ, Created.
+**		     5/25/90, DSJ, Adapted to multiple feature types.
+**				Tuesday, May 17, 1998 Changes made to make feature specific and
+**				simplify structures. First step in simplifying training process.
 **
- **  (c) Copyright Hewlett-Packard Company, 1988.
+ **	(c) Copyright Hewlett-Packard Company, 1988.
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
  ** You may obtain a copy of the License at
@@ -24,7 +24,7 @@
  ** limitations under the License.
 ******************************************************************************/
 /**----------------------------------------------------------------------------
-          Include Files and Type Defines
+					Include Files and Type Defines
 ----------------------------------------------------------------------------**/
 #include "oldlist.h"
 #include "efio.h"
@@ -33,6 +33,7 @@
 #include "tessopt.h"
 #include "ocrfeatures.h"
 #include "mf.h"
+#include "general.h"
 #include "clusttool.h"
 #include "cluster.h"
 #include "protos.h"
@@ -40,6 +41,7 @@
 #include "tprintf.h"
 #include "const.h"
 #include "mergenf.h"
+#include "name2char.h"
 #include "intproto.h"
 #include "freelist.h"
 #include "efio.h"
@@ -61,56 +63,61 @@
 #endif
 
 #define PROGRAM_FEATURE_TYPE "mf"
+#define MINSD (1.0f / 128.0f)
 
 static const char* kInputUnicharsetFile = "unicharset";
 static const char* kOutputUnicharsetFile = "mfunicharset";
 /**----------------------------------------------------------------------------
-          Public Function Prototypes
+					Public Function Prototypes
 ----------------------------------------------------------------------------**/
 int main (
-     int  argc,
-     char  **argv);
+     int	argc,
+     char	**argv);
 
 /**----------------------------------------------------------------------------
-          Private Function Prototypes
+					Private Function Prototypes
 ----------------------------------------------------------------------------**/
+LIST ReadTrainingSamples (
+     FILE	*File);
+
+void WriteClusteredTrainingSamples (
+     char	*Directory,
+     LIST	ProtoList,
+	 CLUSTERER *Clusterer,
+	 LABELEDLIST CharSample);
+/**/
+void WriteMergedTrainingSamples(
+    char	*Directory,
+	LIST ClassList);
 
 void WriteMicrofeat(
-    char  *Directory,
-  LIST  ClassList);
+    char	*Directory,
+	LIST	ClassList);
 
 void WriteProtos(
-  FILE* File,
-  MERGE_CLASS MergeClass);
+	FILE* File,
+	MERGE_CLASS MergeClass);
 
 void WriteConfigs(
-  FILE* File,
-  CLASS_TYPE Class);
+	FILE* File,
+	CLASS_TYPE Class);
 
 /*
 PARAMDESC *ConvertToPARAMDESC(
-  PARAM_DESC* Param_Desc,
-  int N);
+	PARAM_DESC* Param_Desc,
+	int N);
 */
 
-void WritePFFMTable(INT_TEMPLATES Templates, const UNICHARSET& unicharset,
-                    const char* filename);
-
-void InitXHeights(const char *filename,
-                  const UnicityTable<FontInfo> &fontinfo_table,
-                  int xheights[]);
-
-void AddSpacingInfo(const char *filename, int fontinfo_id,
-                    const UNICHARSET &unicharset, const int xheights[],
-                     UnicityTable<FontInfo> *fontinfo_table);
+void WritePFFMTable(INT_TEMPLATES Templates, const char* filename);
 
 // global variable to hold configuration parameters to control clustering
 // -M 0.40   -B 0.05   -I 1.0   -C 1e-6.
 CLUSTERCONFIG Config =
 { elliptical, 0.625, 0.05, 1.0, 1e-6, 0 };
 
+
 /*----------------------------------------------------------------------------
-            Public Code
+						Public Code
 -----------------------------------------------------------------------------*/
 void DisplayProtoList(const char* ch, LIST protolist) {
   void* window = c_create_window("Char samples", 50, 200,
@@ -153,56 +160,55 @@ char* new_dup(const char* str) {
 /*---------------------------------------------------------------------------*/
 int main (int argc, char **argv) {
 /*
-**  Parameters:
-**    argc  number of command line arguments
-**    argv  array of command line arguments
-**  Globals: none
-**  Operation:
-**    This program reads in a text file consisting of feature
-**    samples from a training page in the following format:
+**	Parameters:
+**		argc	number of command line arguments
+**		argv	array of command line arguments
+**	Globals: none
+**	Operation:
+**		This program reads in a text file consisting of feature
+**		samples from a training page in the following format:
 **
-**      FontName CharName NumberOfFeatureTypes(N)
-**         FeatureTypeName1 NumberOfFeatures(M)
-**            Feature1
-**            ...
-**            FeatureM
-**         FeatureTypeName2 NumberOfFeatures(M)
-**            Feature1
-**            ...
-**            FeatureM
-**         ...
-**         FeatureTypeNameN NumberOfFeatures(M)
-**            Feature1
-**            ...
-**            FeatureM
-**      FontName CharName ...
+**			FontName CharName NumberOfFeatureTypes(N)
+**			   FeatureTypeName1 NumberOfFeatures(M)
+**			      Feature1
+**			      ...
+**			      FeatureM
+**			   FeatureTypeName2 NumberOfFeatures(M)
+**			      Feature1
+**			      ...
+**			      FeatureM
+**			   ...
+**			   FeatureTypeNameN NumberOfFeatures(M)
+**			      Feature1
+**			      ...
+**			      FeatureM
+**			FontName CharName ...
 **
-**    The result of this program is a binary inttemp file used by
-**    the OCR engine.
-**  Return: none
-**  Exceptions: none
-**  History:  Fri Aug 18 08:56:17 1989, DSJ, Created.
-**        Mon May 18 1998, Christy Russson, Revistion started.
+**		The result of this program is a binary inttemp file used by
+**		the OCR engine.
+**	Return: none
+**	Exceptions: none
+**	History:	Fri Aug 18 08:56:17 1989, DSJ, Created.
+**				Mon May 18 1998, Christy Russson, Revistion started.
 */
-  char  *PageName;
-  FILE  *TrainingPage;
-  FILE  *OutFile;
-  CLUSTERER  *Clusterer = NULL;
-  LIST    ProtoList = NIL_LIST;
+  char	*PageName;
+  FILE	*TrainingPage;
+  FILE	*OutFile;
+  LIST	CharList;
+  CLUSTERER	*Clusterer = NULL;
+  LIST		ProtoList = NIL;
   LABELEDLIST CharSample;
-  PROTOTYPE  *Prototype;
-  LIST     ClassList = NIL_LIST;
-  int    Cid, Pid;
-  PROTO    Proto;
-  PROTO_STRUCT  DummyProto;
-  BIT_VECTOR  Config2;
-  MERGE_CLASS  MergeClass;
-  INT_TEMPLATES  IntTemplates;
+  PROTOTYPE	*Prototype;
+  LIST   	ClassList = NIL;
+  int		Cid, Pid;
+  PROTO		Proto;
+  PROTO_STRUCT	DummyProto;
+  BIT_VECTOR	Config2;
+  MERGE_CLASS	MergeClass;
+  INT_TEMPLATES	IntTemplates;
   LIST pCharList, pProtoList;
   char Filename[MAXNAMESIZE];
-  tesseract::Classify *classify = new tesseract::Classify();
-  FEATURE_DEFS_STRUCT FeatureDefs;
-  InitFeatureDefs(&FeatureDefs);
+  tesseract::Classify classify;
 
   ParseArguments (argc, argv);
   if (InputUnicharsetFile == NULL) {
@@ -212,18 +218,16 @@ int main (int argc, char **argv) {
     OutputUnicharsetFile = kOutputUnicharsetFile;
   }
 
-  UNICHARSET unicharset_training;
-  if (!unicharset_training.load_from_file(InputUnicharsetFile, true)) {
+  if (!unicharset_training.load_from_file(InputUnicharsetFile)) {
     fprintf(stderr, "Failed to load unicharset from file %s\n"
             "Building unicharset for mftraining from scratch...\n",
             InputUnicharsetFile);
     unicharset_training.clear();
-    // Space character needed to represent NIL_LIST classification.
+    // Space character needed to represent NIL classification.
     unicharset_training.unichar_insert(" ");
   }
 
 
-  // Populate fontinfo_table with font properties.
   if (InputFontInfoFile != NULL) {
     FILE* f = fopen(InputFontInfoFile, "r");
     if (f == NULL) {
@@ -243,21 +247,19 @@ int main (int argc, char **argv) {
             (fixed << 2) +
             (serif << 3) +
             (fraktur << 4);
-        if (!classify->get_fontinfo_table().contains(fontinfo)) {
-          classify->get_fontinfo_table().push_back(fontinfo);
+        if (!classify.get_fontinfo_table().contains(fontinfo)) {
+          classify.get_fontinfo_table().push_back(fontinfo);
         } else {
           fprintf(stderr, "Font %s already defined\n", fontinfo.name);
+          return 1;
         }
       }
       fclose(f);
     }
   }
 
-  int *xheights = new int[classify->get_fontinfo_table().size()];
-  InitXHeights(InputXHeightsFile, classify->get_fontinfo_table(), xheights);
-
   while ((PageName = GetNextFilename(argc, argv)) != NULL) {
-    tprintf ("Reading %s ...\n", PageName);
+    printf ("Reading %s ...\n", PageName);
     char *short_name = strrchr(PageName, '/');
     if (short_name == NULL)
       short_name = PageName;
@@ -280,41 +282,37 @@ int main (int argc, char **argv) {
     int fontinfo_id;
     FontInfo fontinfo;
     fontinfo.name = short_name;
-    fontinfo.properties = 0;  // not used to lookup in the table
-    if (!classify->get_fontinfo_table().contains(fontinfo)) {
-      fontinfo_id = classify->get_fontinfo_table().push_back(fontinfo);
-      tprintf("%s has no defined properties.\n", short_name);
-      ASSERT_HOST(!"Missing font_properties entry is a fatal error!");
+    fontinfo.properties = 0;  // Not used to lookup in the table
+    if (!classify.get_fontinfo_table().contains(fontinfo)) {
+      fontinfo_id = classify.get_fontinfo_table().push_back(fontinfo);
+      printf("%s has no defined properties.\n", short_name);
     } else {
-      fontinfo_id = classify->get_fontinfo_table().get_id(fontinfo);
-      // Update the properties field.
-      fontinfo = classify->get_fontinfo_table().get(fontinfo_id);
+      fontinfo_id = classify.get_fontinfo_table().get_id(fontinfo);
+      // Update the properties field
+      fontinfo = classify.get_fontinfo_table().get(fontinfo_id);
       delete[] short_name;
     }
-
     TrainingPage = Efopen (PageName, "r");
-    LIST char_list = NIL_LIST;
-    ReadTrainingSamples(FeatureDefs, PROGRAM_FEATURE_TYPE,
-                        0, 1.0f / 128.0f, 1.0f / 64.0f, &unicharset_training,
-                        TrainingPage, &char_list);
+    CharList = ReadTrainingSamples (TrainingPage);
     fclose (TrainingPage);
-    pCharList = char_list;
+    //WriteTrainingSamples (Directory, CharList);
+    pCharList = CharList;
     iterate(pCharList) {
-      // Cluster.
+      //Cluster
       CharSample = (LABELEDLIST) first_node (pCharList);
-      Clusterer =
-        SetUpForClustering(FeatureDefs, CharSample, PROGRAM_FEATURE_TYPE);
+//    printf ("\nClustering %s ...", CharSample->Label);
+      Clusterer = SetUpForClustering(CharSample, PROGRAM_FEATURE_TYPE);
       Config.MagicSamples = CharSample->SampleCount;
       ProtoList = ClusterSamples(Clusterer, &Config);
       CleanUpUnusedData(ProtoList);
 
-      // Merge.
+      //Merge
       MergeInsignificantProtos(ProtoList, CharSample->Label,
                                Clusterer, &Config);
       if (strcmp(test_ch, CharSample->Label) == 0)
         DisplayProtoList(test_ch, ProtoList);
-      ProtoList = RemoveInsignificantProtos(ProtoList, true,
-                                            false,
+      ProtoList = RemoveInsignificantProtos(ProtoList, ShowSignificantProtos,
+                                            ShowInsignificantProtos,
                                             Clusterer->SampleSize);
       FreeClusterer(Clusterer);
       MergeClass = FindClass (ClassList, CharSample->Label);
@@ -328,7 +326,7 @@ int main (int argc, char **argv) {
       iterate (pProtoList) {
         Prototype = (PROTOTYPE *) first_node (pProtoList);
 
-        // See if proto can be approximated by existing proto.
+        // see if proto can be approximated by existing proto
         Pid = FindClosestExistingProto(MergeClass->Class,
                                        MergeClass->NumMerged, Prototype);
         if (Pid == NO_PROTO) {
@@ -349,22 +347,13 @@ int main (int argc, char **argv) {
       }
       FreeProtoList (&ProtoList);
     }
-    FreeTrainingSamples(char_list);
-
-    // If there is a file with [lang].[fontname].exp[num].fontinfo present,
-    // write font spacing information to fontinfo_table.
-    int pagename_len = strlen(PageName);
-    char *fontinfo_file_name = new char[pagename_len + 7];
-    strncpy(fontinfo_file_name, PageName, pagename_len-2);  // remove "tr"
-    strcpy(fontinfo_file_name+pagename_len-2, "fontinfo");  // add "fontinfo"
-    AddSpacingInfo(fontinfo_file_name, fontinfo_id, unicharset_training,
-                   xheights, &(classify->get_fontinfo_table()));
-    delete[] fontinfo_file_name;
+    FreeTrainingSamples (CharList);
   }
+  //WriteMergedTrainingSamples(Directory,ClassList);
   WriteMicrofeat(Directory, ClassList);
-  SetUpForFloat2Int(unicharset_training, ClassList);
-  IntTemplates = classify->CreateIntTemplates(TrainingData,
-                                              unicharset_training);
+  SetUpForFloat2Int(ClassList);
+  IntTemplates = classify.CreateIntTemplates(TrainingData,
+                                             unicharset_training);
   strcpy (Filename, "");
   if (Directory != NULL) {
     strcat (Filename, Directory);
@@ -376,7 +365,7 @@ int main (int argc, char **argv) {
 #else
   OutFile = Efopen (Filename, "wb");
 #endif
-  classify->WriteIntTemplates(OutFile, IntTemplates, unicharset_training);
+  classify.WriteIntTemplates(OutFile, IntTemplates, unicharset_training);
   fclose (OutFile);
   strcpy (Filename, "");
   if (Directory != NULL) {
@@ -385,7 +374,7 @@ int main (int argc, char **argv) {
   }
   strcat (Filename, "pffmtable");
   // Now create pffmtable.
-  WritePFFMTable(IntTemplates, unicharset_training, Filename);
+  WritePFFMTable(IntTemplates, Filename);
   // Write updated unicharset to a file.
   if (!unicharset_training.save_to_file(OutputUnicharsetFile)) {
     fprintf(stderr, "Failed to save unicharset to file %s\n",
@@ -394,95 +383,238 @@ int main (int argc, char **argv) {
   }
   printf ("Done!\n"); /**/
   FreeLabeledClassList (ClassList);
-  delete classify;
-  if (test_ch[0] != '\0') {
-    // If we are displaying debug window(s), wait for the user to look at them.
-    while (getchar() != '\n');
-  }
   return 0;
-}  /* main */
+}	/* main */
 
 
 /**----------------------------------------------------------------------------
-              Private Code
+							Private Code
 ----------------------------------------------------------------------------**/
+/*---------------------------------------------------------------------------*/
+LIST ReadTrainingSamples (
+     FILE	*File)
 
+/*
+**	Parameters:
+**		File		open text file to read samples from
+**	Globals: none
+**	Operation:
+**		This routine reads training samples from a file and
+**		places them into a data structure which organizes the
+**		samples by FontName and CharName.  It then returns this
+**		data structure.
+**	Return: none
+**	Exceptions: none
+**	History: Fri Aug 18 13:11:39 1989, DSJ, Created.
+**			 Tue May 17 1998 simplifications to structure, illiminated
+**				font, and feature specification levels of structure.
+*/
+
+{
+	char			unichar[UNICHAR_LEN + 1];
+	LABELEDLIST             CharSample;
+        FEATURE_SET             FeatureSamples;
+	LIST			TrainingSamples = NIL;
+	CHAR_DESC		CharDesc;
+	int			Type, i;
+
+	while (fscanf (File, "%s %s", CTFontName, unichar) == 2) {
+          if (!unicharset_training.contains_unichar(unichar)) {
+            unicharset_training.unichar_insert(unichar);
+            if (unicharset_training.size() > MAX_NUM_CLASSES) {
+              cprintf("Error: Size of unicharset of mftraining is "
+                      "greater than MAX_NUM_CLASSES\n");
+              exit(1);
+            }
+          }
+		CharSample = FindList (TrainingSamples, unichar);
+		if (CharSample == NULL) {
+			CharSample = NewLabeledList (unichar);
+			TrainingSamples = push (TrainingSamples, CharSample);
+		}
+		CharDesc = ReadCharDescription (File);
+		Type = ShortNameToFeatureType(PROGRAM_FEATURE_TYPE);
+		FeatureSamples = CharDesc->FeatureSets[Type];
+                for (int feature = 0; feature < FeatureSamples->NumFeatures; ++feature) {
+                  FEATURE f = FeatureSamples->Features[feature];
+                  for (int dim =0; dim < f->Type->NumParams; ++dim)
+                    f->Params[dim] += dim == MFDirection ?
+                                    UniformRandomNumber(-MINSD_ANGLE, MINSD_ANGLE) :
+                                    UniformRandomNumber(-MINSD, MINSD);
+                }
+		CharSample->List = push (CharSample->List, FeatureSamples);
+        CharSample->SampleCount++;
+		for (i = 0; i < CharDesc->NumFeatureSets; i++)
+                  if (Type != i)
+                    FreeFeatureSet(CharDesc->FeatureSets[i]);
+		free (CharDesc);
+        }
+	return (TrainingSamples);
+
+}	/* ReadTrainingSamples */
+
+
+/*----------------------------------------------------------------------------*/
+void WriteClusteredTrainingSamples (
+     char	*Directory,
+     LIST	ProtoList,
+	 CLUSTERER *Clusterer,
+	 LABELEDLIST CharSample)
+
+/*
+**	Parameters:
+**		Directory	directory to place sample files into
+**	Operation:
+**		This routine writes the specified samples into files which
+**		are organized according to the font name and character name
+**		of the samples.
+**	Return: none
+**	Exceptions: none
+**	History: Fri Aug 18 16:17:06 1989, DSJ, Created.
+*/
+
+{
+	FILE		*File;
+	char		Filename[MAXNAMESIZE];
+
+	strcpy (Filename, "");
+	if (Directory != NULL)
+	{
+		strcat (Filename, Directory);
+		strcat (Filename, "/");
+	}
+	strcat (Filename, CTFontName);
+	strcat (Filename, "/");
+	strcat (Filename, CharSample->Label);
+	strcat (Filename, ".");
+	strcat (Filename, PROGRAM_FEATURE_TYPE);
+	strcat (Filename, ".p");
+	printf ("\nWriting %s ...", Filename);
+	File = Efopen (Filename, "w");
+	WriteProtoList(File, Clusterer->SampleSize, Clusterer->ParamDesc,
+		ProtoList, ShowSignificantProtos, ShowInsignificantProtos);
+	fclose (File);
+
+}	/* WriteClusteredTrainingSamples */
+
+/*---------------------------------------------------------------------------*/
+void WriteMergedTrainingSamples(
+    char	*Directory,
+	LIST ClassList)
+
+{
+	FILE		*File;
+	char		Filename[MAXNAMESIZE];
+	MERGE_CLASS MergeClass;
+
+	iterate (ClassList)
+	{
+		MergeClass = (MERGE_CLASS) first_node (ClassList);
+		strcpy (Filename, "");
+		if (Directory != NULL)
+		{
+			strcat (Filename, Directory);
+			strcat (Filename, "/");
+		}
+		strcat (Filename, "Merged/");
+		strcat (Filename, MergeClass->Label);
+		strcat (Filename, PROTO_SUFFIX);
+		printf ("\nWriting Merged %s ...", Filename);
+		File = Efopen (Filename, "w");
+		WriteOldProtoFile (File, MergeClass->Class);
+		fclose (File);
+
+		strcpy (Filename, "");
+		if (Directory != NULL)
+		{
+			strcat (Filename, Directory);
+			strcat (Filename, "/");
+		}
+		strcat (Filename, "Merged/");
+		strcat (Filename, MergeClass->Label);
+		strcat (Filename, CONFIG_SUFFIX);
+		printf ("\nWriting Merged %s ...", Filename);
+		File = Efopen (Filename, "w");
+		WriteOldConfigFile (File, MergeClass->Class);
+		fclose (File);
+	}
+
+}	// WriteMergedTrainingSamples
 
 /*--------------------------------------------------------------------------*/
 void WriteMicrofeat(
-    char  *Directory,
-  LIST  ClassList)
+    char	*Directory,
+	LIST	ClassList)
 
 {
-  FILE    *File;
-  char    Filename[MAXNAMESIZE];
-  MERGE_CLASS MergeClass;
+	FILE		*File;
+	char		Filename[MAXNAMESIZE];
+	MERGE_CLASS MergeClass;
 
-  strcpy (Filename, "");
-  if (Directory != NULL)
-  {
-    strcat (Filename, Directory);
-    strcat (Filename, "/");
-  }
-  strcat (Filename, "Microfeat");
-  File = Efopen (Filename, "w");
-  printf ("\nWriting Merged %s ...", Filename);
-  iterate(ClassList)
-  {
-    MergeClass = (MERGE_CLASS) first_node (ClassList);
-    WriteProtos(File, MergeClass);
-    WriteConfigs(File, MergeClass->Class);
-  }
-  fclose (File);
+	strcpy (Filename, "");
+	if (Directory != NULL)
+	{
+		strcat (Filename, Directory);
+		strcat (Filename, "/");
+	}
+	strcat (Filename, "Microfeat");
+	File = Efopen (Filename, "w");
+	printf ("\nWriting Merged %s ...", Filename);
+	iterate(ClassList)
+	{
+		MergeClass = (MERGE_CLASS) first_node (ClassList);
+		WriteProtos(File, MergeClass);
+		WriteConfigs(File, MergeClass->Class);
+	}
+	fclose (File);
 } // WriteMicrofeat
 
 /*---------------------------------------------------------------------------*/
 void WriteProtos(
-  FILE* File,
-  MERGE_CLASS MergeClass)
+	FILE* File,
+	MERGE_CLASS MergeClass)
 {
-  float Values[3];
-  int i;
-  PROTO Proto;
+	float Values[3];
+	int i;
+	PROTO Proto;
 
-  fprintf(File, "%s\n", MergeClass->Label);
-  fprintf(File, "%d\n", MergeClass->Class->NumProtos);
-  for(i=0; i < MergeClass->Class->NumProtos; i++)
-  {
-    Proto = ProtoIn(MergeClass->Class,i);
-    fprintf(File, "\t%8.4f %8.4f %8.4f %8.4f ", Proto->X, Proto->Y,
-      Proto->Length, Proto->Angle);
-    Values[0] = Proto->X;
-    Values[1] = Proto->Y;
-    Values[2] = Proto->Angle;
-    Normalize(Values);
-    fprintf(File, "%8.4f %8.4f %8.4f\n", Values[0], Values[1], Values[2]);
-  }
+	fprintf(File, "%s\n", MergeClass->Label);
+	fprintf(File, "%d\n", MergeClass->Class->NumProtos);
+	for(i=0; i < MergeClass->Class->NumProtos; i++)
+	{
+		Proto = ProtoIn(MergeClass->Class,i);
+		fprintf(File, "\t%8.4f %8.4f %8.4f %8.4f ", Proto->X, Proto->Y,
+			Proto->Length, Proto->Angle);
+		Values[0] = Proto->X;
+		Values[1] = Proto->Y;
+		Values[2] = Proto->Angle;
+		Normalize(Values);
+		fprintf(File, "%8.4f %8.4f %8.4f\n", Values[0], Values[1], Values[2]);
+	}
 } // WriteProtos
 
 /*----------------------------------------------------------------------------*/
 void WriteConfigs(
-  FILE* File,
-  CLASS_TYPE Class)
+	FILE* File,
+	CLASS_TYPE Class)
 {
-  BIT_VECTOR Config;
-  int i, j, WordsPerConfig;
+	BIT_VECTOR Config;
+	int i, j, WordsPerConfig;
 
-  WordsPerConfig = WordsInVectorOfSize(Class->NumProtos);
-  fprintf(File, "%d %d\n", Class->NumConfigs,WordsPerConfig);
-  for(i=0; i < Class->NumConfigs; i++)
-  {
-    Config = Class->Configurations[i];
-    for(j=0; j < WordsPerConfig; j++)
-      fprintf(File, "%08x ", Config[j]);
-    fprintf(File, "\n");
-  }
-  fprintf(File, "\n");
+	WordsPerConfig = WordsInVectorOfSize(Class->NumProtos);
+	fprintf(File, "%d %d\n", Class->NumConfigs,WordsPerConfig);
+	for(i=0; i < Class->NumConfigs; i++)
+	{
+		Config = Class->Configurations[i];
+		for(j=0; j < WordsPerConfig; j++)
+			fprintf(File, "%08x ", Config[j]);
+		fprintf(File, "\n");
+	}
+	fprintf(File, "\n");
 } // WriteConfigs
 
 /*--------------------------------------------------------------------------*/
-void WritePFFMTable(INT_TEMPLATES Templates, const UNICHARSET& unicharset,
-                    const char* filename) {
+void WritePFFMTable(INT_TEMPLATES Templates, const char* filename) {
   FILE* fp = Efopen(filename, "wb");
   /* then write out each class */
   for (int i = 0; i < Templates->NumClasses; i++) {
@@ -490,11 +622,11 @@ void WritePFFMTable(INT_TEMPLATES Templates, const UNICHARSET& unicharset,
     // Todo: Test with min instead of max
     // int MaxLength = LengthForConfigId(Class, 0);
     int MaxLength = 0;
-    const char *unichar = unicharset.id_to_unichar(i);
+    const char *unichar = unicharset_training.id_to_unichar(i);
     if (strcmp(unichar, " ") == 0) {
       unichar = "NULL";
     } else if (Class->NumConfigs == 0) {
-      tprintf("Error: no configs for class %s in mftraining\n", unichar);
+      cprintf("Error: no configs for class %s in mftraining\n", unichar);
     }
     for (int ConfigId = 0; ConfigId < Class->NumConfigs; ConfigId++) {
       // Todo: Test with min instead of max
@@ -506,73 +638,3 @@ void WritePFFMTable(INT_TEMPLATES Templates, const UNICHARSET& unicharset,
   }
   fclose(fp);
 } // WritePFFMTable
-
-/*--------------------------------------------------------------------------*/
-// Reads xheights for various fonts from filename and records them into
-// xheights[] keyed by fontinfo_id (xheights[] is assumed to have
-// fontinfo_table->size() slots allocated).
-void InitXHeights(const char *filename,
-                   const UnicityTable<FontInfo> &fontinfo_table,
-                   int xheights[]) {
-  for (int i = 0; i < fontinfo_table.size(); ++i) xheights[i] = -1;
-  if (filename == NULL) return;
-  FILE *f = fopen(filename, "r");
-  if (f == NULL) {
-    fprintf(stderr, "Failed to load font xheights from %s\n", filename);
-    return;
-  }
-  tprintf("Reading x-heights from %s ...\n", filename);
-  FontInfo fontinfo;
-  fontinfo.properties = 0;  // not used to lookup in the table
-  char buffer[1024];
-  int xht;
-  while (!feof(f)) {
-    ASSERT_HOST(fscanf(f, "%1024s %d\n", buffer, &xht) == 2);
-    fontinfo.name = buffer;
-    if (!fontinfo_table.contains(fontinfo)) continue;
-    int fontinfo_id = fontinfo_table.get_id(fontinfo);
-    xheights[fontinfo_id] = xht;
-  }
-}  // InitXHeights
-
-/*--------------------------------------------------------------------------*/
-// Reads spacing stats from filename and adds them to fontinfo_table.
-void AddSpacingInfo(const char *filename,
-                     int fontinfo_id,
-                     const UNICHARSET &unicharset,
-                     const int xheights[],
-                     UnicityTable<FontInfo> *fontinfo_table) {
-  FILE* fontinfo_file = fopen(filename, "r");
-  if (fontinfo_file == NULL) return;
-  tprintf("Reading spacing from %s ...\n", filename);
-  int scale = kBlnXHeight / xheights[fontinfo_id];
-  int num_unichars;
-  char uch[UNICHAR_LEN];
-  char kerned_uch[UNICHAR_LEN];
-  int x_gap, x_gap_before, x_gap_after, num_kerned;
-  ASSERT_HOST(fscanf(fontinfo_file, "%d\n", &num_unichars) == 1);
-  FontInfo *fi = fontinfo_table->get_mutable(fontinfo_id);
-  fi->init_spacing(unicharset.size());
-  FontSpacingInfo *spacing = NULL;
-  for (int l = 0; l < num_unichars; ++l) {
-    ASSERT_HOST(fscanf(fontinfo_file, "%s %d %d %d",
-                       uch, &x_gap_before,
-                       &x_gap_after, &num_kerned) == 4);
-    bool valid = unicharset.contains_unichar(uch);
-    if (valid) {
-      spacing = new FontSpacingInfo();
-      spacing->x_gap_before = static_cast<inT16>(x_gap_before * scale);
-      spacing->x_gap_after = static_cast<inT16>(x_gap_after * scale);
-    }
-    for (int k = 0; k < num_kerned; ++k) {
-      ASSERT_HOST(fscanf(fontinfo_file, "%s %d", kerned_uch, &x_gap) == 2);
-      if (!valid || !unicharset.contains_unichar(kerned_uch)) continue;
-      spacing->kerned_unichar_ids.push_back(
-          unicharset.unichar_to_id(kerned_uch));
-      spacing->kerned_x_gaps.push_back(static_cast<inT16>(x_gap * scale));
-    }
-    if (valid) fi->add_spacing(unicharset.unichar_to_id(uch), spacing);
-  }
-  fclose(fontinfo_file);
-}  // AddSpacingInfo
-

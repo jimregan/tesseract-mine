@@ -32,6 +32,8 @@
 #define IMAGE_XPOS      250
 /** default position */
 #define IMAGE_YPOS      0
+/** control D */
+#define CTRLD         '\004'
 
 #define EXTERN
 

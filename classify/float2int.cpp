@@ -93,6 +93,7 @@ void Classify::ComputeIntCharNormArray(
   }
 }                                /* ComputeIntCharNormArray */
 
+}  // namespace tesseract
 
 /*---------------------------------------------------------------------------*/
 /**
@@ -109,8 +110,7 @@ void Classify::ComputeIntCharNormArray(
  * @note Exceptions: none
  * @note History: Wed Feb 20 10:58:45 1991, DSJ, Created.
  */
-void Classify::ComputeIntFeatures(FEATURE_SET Features,
-                                  INT_FEATURE_ARRAY IntFeatures) {
+void ComputeIntFeatures(FEATURE_SET Features, INT_FEATURE_ARRAY IntFeatures) {
   int Fid;
   FEATURE Feature;
   FLOAT32 YShift;
@@ -132,4 +132,3 @@ void Classify::ComputeIntFeatures(FEATURE_SET Features,
     IntFeatures[Fid].CP_misses = 0;
   }
 }                                /* ComputeIntFeatures */
-}  // namespace tesseract

@@ -22,7 +22,13 @@
 //#include                                      "basefile.h"
 #include          "rejctmap.h"
 #include          "secname.h"
-#include          "params.h"
+
+#define EXTERN
+
+EXTERN BOOL_VAR (rejword_only_set_if_accepted, TRUE, "Mimic old reject_word");
+EXTERN BOOL_VAR (rejmap_allow_more_good_qual, FALSE,
+"Use initial good qual setting");
+EXTERN BOOL_VAR (rej_use_1Il_rej, TRUE, "1Il rejection enabled");
 
 BOOL8 REJ::perm_rejected() {  //Is char perm reject?
   return (flag (R_TESS_FAILURE) ||
@@ -90,9 +96,10 @@ BOOL8 REJ::accept_if_good_quality() {  //potential rej?
     !flag (R_POOR_MATCH) &&
     !flag (R_NOT_TESS_ACCEPTED) &&
     !flag (R_CONTAINS_BLANKS) &&
+    (rejmap_allow_more_good_qual ||
     (!rej_between_nn_and_mm () &&
-     !rej_between_mm_and_quality_accept () &&
-     !rej_between_quality_and_minimal_rej_accept ()));
+    !rej_between_mm_and_quality_accept () &&
+    !rej_between_quality_and_minimal_rej_accept ())));
 }
 
 
@@ -112,7 +119,8 @@ void REJ::setrej_edge_char() {  //Close to image edge
 
 
 void REJ::setrej_1Il_conflict() {  //Initial reject map
-  set_flag(R_1IL_CONFLICT);
+  if (rej_use_1Il_rej)
+    set_flag(R_1IL_CONFLICT);
 }
 
 
@@ -441,7 +449,8 @@ void REJMAP::rej_word_not_tess_accepted() {  //Reject whole word
   int i;
 
   for (i = 0; i < len; i++) {
-    if (ptr[i].accepted()) ptr[i].setrej_not_tess_accepted();
+    if (!rejword_only_set_if_accepted || ptr[i].accepted ())
+      ptr[i].setrej_not_tess_accepted ();
   }
 }
 
@@ -450,7 +459,8 @@ void REJMAP::rej_word_contains_blanks() {  //Reject whole word
   int i;
 
   for (i = 0; i < len; i++) {
-    if (ptr[i].accepted()) ptr[i].setrej_contains_blanks();
+    if (!rejword_only_set_if_accepted || ptr[i].accepted ())
+      ptr[i].setrej_contains_blanks ();
   }
 }
 
@@ -459,7 +469,8 @@ void REJMAP::rej_word_bad_permuter() {  //Reject whole word
   int i;
 
   for (i = 0; i < len; i++) {
-    if (ptr[i].accepted()) ptr[i].setrej_bad_permuter ();
+    if (!rejword_only_set_if_accepted || ptr[i].accepted ())
+      ptr[i].setrej_bad_permuter ();
   }
 }
 
@@ -468,7 +479,8 @@ void REJMAP::rej_word_xht_fixup() {  //Reject whole word
   int i;
 
   for (i = 0; i < len; i++) {
-    if (ptr[i].accepted()) ptr[i].setrej_xht_fixup();
+    if (!rejword_only_set_if_accepted || ptr[i].accepted ())
+      ptr[i].setrej_xht_fixup ();
   }
 }
 
@@ -477,7 +489,8 @@ void REJMAP::rej_word_no_alphanums() {  //Reject whole word
   int i;
 
   for (i = 0; i < len; i++) {
-    if (ptr[i].accepted()) ptr[i].setrej_no_alphanums();
+    if (!rejword_only_set_if_accepted || ptr[i].accepted ())
+      ptr[i].setrej_no_alphanums ();
   }
 }
 
@@ -486,7 +499,8 @@ void REJMAP::rej_word_mostly_rej() {  //Reject whole word
   int i;
 
   for (i = 0; i < len; i++) {
-    if (ptr[i].accepted()) ptr[i].setrej_mostly_rej();
+    if (!rejword_only_set_if_accepted || ptr[i].accepted ())
+      ptr[i].setrej_mostly_rej ();
   }
 }
 
@@ -495,7 +509,8 @@ void REJMAP::rej_word_bad_quality() {  //Reject whole word
   int i;
 
   for (i = 0; i < len; i++) {
-    if (ptr[i].accepted()) ptr[i].setrej_bad_quality();
+    if (!rejword_only_set_if_accepted || ptr[i].accepted ())
+      ptr[i].setrej_bad_quality ();
   }
 }
 
@@ -504,7 +519,8 @@ void REJMAP::rej_word_doc_rej() {  //Reject whole word
   int i;
 
   for (i = 0; i < len; i++) {
-    if (ptr[i].accepted()) ptr[i].setrej_doc_rej();
+    if (!rejword_only_set_if_accepted || ptr[i].accepted ())
+      ptr[i].setrej_doc_rej ();
   }
 }
 
@@ -513,7 +529,8 @@ void REJMAP::rej_word_block_rej() {  //Reject whole word
   int i;
 
   for (i = 0; i < len; i++) {
-    if (ptr[i].accepted()) ptr[i].setrej_block_rej();
+    if (!rejword_only_set_if_accepted || ptr[i].accepted ())
+      ptr[i].setrej_block_rej ();
   }
 }
 
@@ -522,6 +539,7 @@ void REJMAP::rej_word_row_rej() {  //Reject whole word
   int i;
 
   for (i = 0; i < len; i++) {
-    if (ptr[i].accepted()) ptr[i].setrej_row_rej();
+    if (!rejword_only_set_if_accepted || ptr[i].accepted ())
+      ptr[i].setrej_row_rej ();
   }
 }

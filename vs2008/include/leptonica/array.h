@@ -23,7 +23,6 @@
  *      struct Numa2d
  *      struct NumaHash
  *      struct Sarray
- *      struct L_Bytea
  *
  *  Contains definitions for:
  *      Numa interpolation flags
@@ -94,17 +93,6 @@ struct Sarray
 typedef struct Sarray SARRAY;
 
 
-    /* Byte array (analogous to C++ "string") */
-struct L_Bytea
-{
-    size_t           nalloc;    /* number of bytes allocated in data array  */
-    size_t           size;      /* number of bytes presently used           */
-    l_int32          refcount;  /* reference count (1 if no clones)         */
-    l_uint8         *data;      /* data array                               */
-};
-typedef struct L_Bytea L_BYTEA;
-
-
 /*------------------------------------------------------------------------* 
  *                              Array flags                               *
  *------------------------------------------------------------------------*/
@@ -113,12 +101,6 @@ typedef struct L_Bytea L_BYTEA;
 enum {
     L_LINEAR_INTERP = 1,        /* linear     */
     L_QUADRATIC_INTERP = 2      /* quadratic  */
-};
-
-    /* Flags for added borders in Numa */
-enum {
-    L_EXTENDED_BORDER = 1,      /* extended with same value           */
-    L_MIRRORED_BORDER = 2       /* mirrored                           */
 };
 
 

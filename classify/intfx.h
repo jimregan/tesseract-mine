@@ -21,11 +21,10 @@
 /**----------------------------------------------------------------------------
           Include Files and Type Defines
 ----------------------------------------------------------------------------**/
-#include "blobs.h"
+#include "tessclas.h"
+#include "hideedge.h"
 #include "intproto.h"
 #include <math.h>
-
-class DENORM;
 
 typedef struct
 {
@@ -44,13 +43,11 @@ INT_FX_RESULT_STRUCT, *INT_FX_RESULT;
 void InitIntegerFX();
 
 int ExtractIntFeat(TBLOB *Blob,
-                   const DENORM& denorm,
                    INT_FEATURE_ARRAY BLFeat,
                    INT_FEATURE_ARRAY CNFeat,
-                   INT_FX_RESULT Results,
-                   inT32 *FeatureOutlineArray = 0);
+                   INT_FX_RESULT Results);
 
-uinT8 BinaryAnglePlusPi(inT32 Y, inT32 X);
+uinT8 TableLookup(inT32 Y, inT32 X);
 
 int SaveFeature(INT_FEATURE_ARRAY FeatureArray,
                 uinT16 FeatureNum,

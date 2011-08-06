@@ -29,6 +29,7 @@
 #include "closed.h"
 #include "cutil.h"
 #include "callcpp.h"
+//#include <process.h>
 #ifdef __UNIX__
 #include <assert.h>
 #endif
@@ -37,6 +38,7 @@
               V a r i a b l e s
 ----------------------------------------------------------------------*/
 #define TABLE_SIZE 2000
+HASH_TABLE global_hash = NULL;
 
 /*----------------------------------------------------------------------
               F u n c t i o n s
@@ -47,7 +49,7 @@
  * Look in the hash table for a particular value. If it is not there
  * then add it.
  */
-int hash_add(HASH_TABLE state_table, STATE *state) {
+int hash_add(HASH_TABLE state_table, STATE *state) { 
   int x;
   int i = 0;
   int table_limit = TABLE_SIZE;
@@ -71,8 +73,8 @@ int hash_add(HASH_TABLE state_table, STATE *state) {
       x = 0;
   }
   cprintf("warning: hash table is full");
-
-  abort();
+  
+  abort(); 
   return 0;
 }
 
@@ -83,7 +85,7 @@ int hash_add(HASH_TABLE state_table, STATE *state) {
  * Look in the hash table for a particular value. If the value is there
  * then return TRUE, FALSE otherwise.
  */
-int hash_lookup(HASH_TABLE state_table, STATE *state) {
+int hash_lookup(HASH_TABLE state_table, STATE *state) { 
   int x;
   int i = 0;
   int table_limit = TABLE_SIZE;
@@ -107,7 +109,7 @@ int hash_lookup(HASH_TABLE state_table, STATE *state) {
   }
   cprintf ("warning: fell off end of hash table  (%x) %x\n",
     state->part2, state->part2 % table_limit);
-  abort();
+  abort(); 
   return 0;
 }
 
@@ -117,11 +119,15 @@ int hash_lookup(HASH_TABLE state_table, STATE *state) {
  *
  * Create and initialize a hash table.
  */
-HASH_TABLE new_hash_table() {
+HASH_TABLE new_hash_table() { 
   HASH_TABLE ht;
   int x;
 
-  ht = (HASH_TABLE) memalloc (TABLE_SIZE * sizeof (STATE));
+  if (global_hash == NULL)
+    ht = (HASH_TABLE) memalloc (TABLE_SIZE * sizeof (STATE));
+  else
+    ht = global_hash;
+
   for (x = 0; x < TABLE_SIZE; x++) {
     ht[x].part1 = NO_STATE;
     ht[x].part2 = NO_STATE;

@@ -2,14 +2,17 @@ SUBDIRS =
 AM_CPPFLAGS = -I$(top_srcdir)/cutil -I$(top_srcdir)/ccutil \
     -I$(top_srcdir)/ccstruct -I$(top_srcdir)/viewer -I$(top_srcdir)/image
 
+EXTRA_DIST = dict.vcproj
+
 include_HEADERS = \
+    choicearr.h choices.h context.h conversion.h \
     dawg.h dict.h matchdefs.h \
-    permute.h states.h stopper.h trie.h
+    permdawg.h permngram.h permute.h states.h stopper.h trie.h
 
 lib_LTLIBRARIES = libtesseract_dict.la
 libtesseract_dict_la_SOURCES = \
-    context.cpp \
+    choices.cpp context.cpp conversion.cpp \
     dawg.cpp dict.cpp hyphen.cpp \
-    permdawg.cpp permute.cpp states.cpp stopper.cpp trie.cpp
+    permdawg.cpp permngram.cpp permute.cpp states.cpp stopper.cpp trie.cpp
 
 libtesseract_dict_la_LDFLAGS = -version-info $(GENERIC_LIBRARY_VERSION)

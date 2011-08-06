@@ -26,10 +26,18 @@
 #include "ratngs.h"
 
 /*-----------------------------------------------------------------------------
+            Macros
+-----------------------------------------------------------------------------*/
+/** macro for getting the height of a row of text */
+#define RowHeight(R)	((classify_baseline_normalized)?			\
+			(BASELINE_SCALE):				\
+			((R)->lineheight))
+
+/*-----------------------------------------------------------------------------
           Public Function Prototypes
 -----------------------------------------------------------------------------*/
 void AddLargeSpeckleTo(BLOB_CHOICE_LIST *Choices);
 
-BOOL8 LargeSpeckle(TBLOB *Blob);
+BOOL8 LargeSpeckle(TBLOB *Blob, TEXTROW *Row);
 
 #endif

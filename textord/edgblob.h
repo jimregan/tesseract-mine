@@ -21,7 +21,7 @@
 #define           EDGBLOB_H
 
 #include          "scrollview.h"
-#include          "params.h"
+#include          "varable.h"
 #include          "img.h"
 #include          "ocrblock.h"
 #include          "coutln.h"
@@ -74,8 +74,15 @@ class OL_BUCKETS
     inT32 index;                 //for extraction scan
 };
 
-void extract_edges(Pix* pix,        // thresholded image
-                   BLOCK* block);   // block to scan
+void extract_edges(                 //find blobs
+#ifndef GRAPHICS_DISABLED
+                   ScrollView* window,   //window for output
+#endif
+                   IMAGE *image,    //image to scan
+                   IMAGE *t_image,  //thresholded image
+                   ICOORD page_tr,  //corner of page
+                   BLOCK *block     //block to scan
+                  );
 void outlines_to_blobs(               //find blobs
                        BLOCK *block,  //block to scan
                        ICOORD bleft,  //block box //outlines in block

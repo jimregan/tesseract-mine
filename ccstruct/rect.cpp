@@ -17,7 +17,7 @@
  *
  **********************************************************************/
 
-#include          "mfcpch.h"     // precompiled headers
+#include          "mfcpch.h"     //precompiled headers
 #include          "rect.h"
 
 // Include automatically generated configuration file if running autoconf.
@@ -229,4 +229,30 @@ const TBOX & op2) {
     op1.top_right.set_y (-MAX_INT16);
   }
   return op1;
+}
+
+
+/**********************************************************************
+ * TBOX::serialise_asc()  Convert to ascii file.
+ *
+ **********************************************************************/
+
+void TBOX::serialise_asc(         //convert to ascii
+                        FILE *f  //file to use
+                       ) {
+  bot_left.serialise_asc (f);
+  top_right.serialise_asc (f);
+}
+
+
+/**********************************************************************
+ * TBOX::de_serialise_asc()  Convert from ascii file.
+ *
+ **********************************************************************/
+
+void TBOX::de_serialise_asc(         //convert from ascii
+                           FILE *f  //file to use
+                          ) {
+  bot_left.de_serialise_asc (f);
+  top_right.de_serialise_asc (f);
 }

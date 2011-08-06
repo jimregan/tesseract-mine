@@ -22,7 +22,9 @@
           Include Files and Type Defines
 ----------------------------------------------------------------------------**/
 #include "ocrfeatures.h"
-#include "params.h"
+#include "tessclas.h"
+#include "fxdefs.h"
+#include "varable.h"
 
 typedef enum
 { PicoFeatY, PicoFeatDir, PicoFeatX }
@@ -42,8 +44,11 @@ extern double_VAR_H(classify_pico_feature_length, 0.05, "Pico Feature Length");
 ----------------------------------------------------------------------------**/
 #define GetPicoFeatureLength()  (PicoFeatureLength)
 
+FEATURE_SET ExtractPicoFeatures(TBLOB *Blob, LINE_STATS *LineStats); 
+
 /**----------------------------------------------------------------------------
         Global Data Definitions and Declarations
 ----------------------------------------------------------------------------**/
+extern FEATURE_DESC_STRUCT PicoFeatDesc;
 extern FLOAT32 PicoFeatureLength;
 #endif

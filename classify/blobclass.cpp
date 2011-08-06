@@ -20,9 +20,9 @@
       Include Files and Type Defines
 ----------------------------------------------------------------------------**/
 #include "blobclass.h"
+#include "fxdefs.h"
 #include "extract.h"
 #include "efio.h"
-#include "featdefs.h"
 #include "callcpp.h"
 #include "chartoname.h"
 
@@ -49,8 +49,8 @@ extern char imagefile[];
 ----------------------------------------------------------------------------**/
 
 /*---------------------------------------------------------------------------*/
-void LearnBlob(const FEATURE_DEFS_STRUCT &FeatureDefs, const STRING& filename,
-               TBLOB * Blob, const DENORM& denorm, const char* BlobText) {
+void LearnBlob(const STRING& filename,
+               TBLOB * Blob, TEXTROW * Row, const char* BlobText) {
 /*
  **      Parameters:
  **              Blob            blob whose micro-features are to be learned
@@ -81,9 +81,8 @@ void LearnBlob(const FEATURE_DEFS_STRUCT &FeatureDefs, const STRING& filename,
     const char *firstdot = strchr(basename ? basename : filename.string(), '.');
     const char *lastdot  = strrchr(filename.string(), '.');
     if (firstdot != lastdot && firstdot != NULL && lastdot != NULL) {
-      ++firstdot;
-      CurrFontName = firstdot;
-      CurrFontName[lastdot - firstdot] = '\0';
+      strncpy(&CurrFontName[0], firstdot + 1, lastdot - firstdot - 1);
+      CurrFontName[lastdot - firstdot - 1] = '\0';
     }
   }
 
@@ -95,18 +94,19 @@ void LearnBlob(const FEATURE_DEFS_STRUCT &FeatureDefs, const STRING& filename,
     cprintf("TRAINING ... Font name = %s\n", CurrFontName.string());
   }
 
-  LearnBlob(FeatureDefs, FeatureFile, Blob, denorm, BlobText,
-            CurrFontName.string());
+  LearnBlob(FeatureFile, Blob, Row, BlobText, CurrFontName.string());
 }                                // LearnBlob
 
-void LearnBlob(const FEATURE_DEFS_STRUCT &FeatureDefs, FILE* FeatureFile,
-               TBLOB* Blob, const DENORM& denorm,
+void LearnBlob(FILE* FeatureFile, TBLOB* Blob, TEXTROW* Row,
                const char* BlobText, const char* FontName) {
   CHAR_DESC CharDesc;
+  LINE_STATS LineStats;
 
-  ASSERT_HOST(FeatureFile != NULL);
+  EnterLearnMode;
 
-  CharDesc = ExtractBlobFeatures(FeatureDefs, denorm, Blob);
+  GetLineStatsFromRow(Row, &LineStats);
+
+  CharDesc = ExtractBlobFeatures (Blob, &LineStats);
   if (CharDesc == NULL) {
     cprintf("LearnBLob: CharDesc was NULL. Aborting.\n");
     return;
@@ -116,7 +116,7 @@ void LearnBlob(const FEATURE_DEFS_STRUCT &FeatureDefs, FILE* FeatureFile,
   fprintf (FeatureFile, "\n%s %s ", FontName, BlobText);
 
   // write micro-features to file and clean up
-  WriteCharDescription(FeatureDefs, FeatureFile, CharDesc);
+  WriteCharDescription(FeatureFile, CharDesc);
   FreeCharDescription(CharDesc);
 
 }                                // LearnBlob

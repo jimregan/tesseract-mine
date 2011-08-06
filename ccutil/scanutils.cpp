@@ -47,6 +47,7 @@ enum Ranks {
   RANK_LONG = 1,
   RANK_LONGLONG = 2,
   RANK_PTR      = INT_MAX // Special value used for pointers
+//  RANK_PTR      = 3 // Special value used for pointers
 };
 
 const enum Ranks kMinRank = RANK_CHAR;
@@ -213,26 +214,56 @@ double strtofloat(const char* s)
   return minus ? -f : f;
 }
 
+static int tess_vfscanf(FILE* stream, const char *format, va_list ap);
+
+int tess_fscanf(FILE* stream, const char *format, ...)
+{
+  va_list ap;
+  int rv;
+
+  va_start(ap, format);
+  rv = tess_vfscanf(stream, format, ap);
+  va_end(ap);
+
+  return rv;
+}
+
+#ifdef EMBEDDED
 int fscanf(FILE* stream, const char *format, ...)
 {
   va_list ap;
   int rv;
 
   va_start(ap, format);
-  rv = vfscanf(stream, format, ap);
+  rv = tess_vfscanf(stream, format, ap);
   va_end(ap);
 
   return rv;
 }
 
-int vfscanf(FILE* stream, const char *format, va_list ap)
+int vfscanf(FILE* stream, const char *format, ...)
+{
+  va_list ap;
+  int rv;
+
+  va_start(ap, format);
+  rv = tess_vfscanf(stream, format, ap);
+  va_end(ap);
+
+  return rv;
+}
+#endif
+
+#ifndef _MSV_VER
+static
+int tess_vfscanf(FILE* stream, const char *format, va_list ap)
 {
   const char *p = format;
   char ch;
   int q = 0;
   uintmax_t val = 0;
   int rank = RANK_INT;    // Default rank
-  unsigned int width = UINT_MAX;
+  unsigned int width = ~0;
   int base;
   int flags = 0;
   enum {
@@ -252,6 +283,7 @@ int vfscanf(FILE* stream, const char *format, va_list ap)
   int matchinv = 0;   // Is match map inverted?
   unsigned char range_start = 0;
   off_t start_off = ftell(stream);
+  double fval;
 
   // Skip leading spaces
   SkipSpace(stream);
@@ -261,7 +293,7 @@ int vfscanf(FILE* stream, const char *format, va_list ap)
       case ST_NORMAL:
         if (ch == '%') {
           state = ST_FLAGS;
-          flags = 0; rank = RANK_INT; width = UINT_MAX;
+          flags = 0; rank = RANK_INT; width = ~0;
         } else if (isspace(static_cast<unsigned char>(ch))) {
           SkipSpace(stream);
         } else {
@@ -413,8 +445,7 @@ int vfscanf(FILE* stream, const char *format, va_list ap)
                 break;
               }
 
-              {
-              double fval = streamtofloat(stream);
+              fval = streamtofloat(stream);
               switch(rank) {
                 case RANK_INT:
                   *va_arg(ap, float *) = static_cast<float>(fval);
@@ -424,7 +455,6 @@ int vfscanf(FILE* stream, const char *format, va_list ap)
                 break;
               }
               converted++;
-              }
             break;
 
             case 'c':               // Character
@@ -539,8 +569,11 @@ int vfscanf(FILE* stream, const char *format, va_list ap)
 
   return converted;
 }
+#endif
 
+#ifdef EMBEDDED
 int creat(const char *pathname, mode_t mode)
 {
   return open(pathname, O_CREAT | O_TRUNC | O_WRONLY, mode);
 }
+#endif

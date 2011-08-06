@@ -21,6 +21,9 @@
 /**----------------------------------------------------------------------------
           Include Files and Type Defines
 ----------------------------------------------------------------------------**/
+#include <setjmp.h>
+
+#define SetErrorTrap(Proc)  setjmp(PushErrorTrap(Proc))
 #define NOERROR       0
 #define DO_NOTHING      0
 
@@ -30,6 +33,9 @@ typedef void (*VOID_PROC) ();
 /**----------------------------------------------------------------------------
           Public Function Prototypes
 ----------------------------------------------------------------------------**/
+void ReleaseErrorTrap(); 
+
 void DoError(int Error, const char *Message); 
 
+jmp_buf &PushErrorTrap(VOID_PROC Procedure); 
 #endif

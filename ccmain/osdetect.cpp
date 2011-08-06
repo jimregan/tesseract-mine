@@ -2,7 +2,6 @@
 // File:        osdetect.cpp
 // Description: Orientation and script detection.
 // Author:      Samuel Charron
-//              Ranjith Unnikrishnan
 //
 // (C) Copyright 2008, Google Inc.
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,30 +18,32 @@
 
 #include "osdetect.h"
 
+#include "strngs.h"
 #include "blobbox.h"
 #include "blread.h"
-#include "colfind.h"
-#include "imagefind.h"
-#include "linefind.h"
-#include "oldlist.h"
-#include "qrsequence.h"
+#include "tordmain.h"
 #include "ratngs.h"
-#include "strngs.h"
-#include "tabvector.h"
+#include "oldlist.h"
+#include "adaptmatch.h"
+#include "tstruct.h"
+#include "expandblob.h"
 #include "tesseractclass.h"
-#include "textord.h"
+#include "qrsequence.h"
+
+extern IMAGE page_image;
 
 const int kMinCharactersToTry = 50;
 const int kMaxCharactersToTry = 5 * kMinCharactersToTry;
 
 const float kSizeRatioToReject = 2.0;
-const int kMinAcceptableBlobHeight = 10;
 
 const float kOrientationAcceptRatio = 1.3;
 const float kScriptAcceptRatio = 1.3;
 
 const float kHanRatioInKorean = 0.7;
 const float kHanRatioInJapanese = 0.3;
+
+const float kLatinRationInFraktur = 0.7;
 
 const float kNonAmbiguousMargin = 1.0;
 
@@ -58,140 +59,45 @@ const char* ScriptDetector::korean_script_ = "Korean";
 const char* ScriptDetector::japanese_script_ = "Japanese";
 const char* ScriptDetector::fraktur_script_ = "Fraktur";
 
-// Minimum believable resolution.
-const int kMinCredibleResolution = 70;
-// Default resolution used if input is not believable.
-const int kDefaultResolution = 300;
-
-void OSResults::update_best_orientation() {
-  float first = orientations[0];
-  float second = orientations[1];
-  best_result.orientation_id = 0;
-  if (orientations[0] < orientations[1]) {
-    first = orientations[1];
-    second = orientations[0];
-    best_result.orientation_id = 1;
-  }
-  for (int i = 2; i < 4; ++i) {
-    if (orientations[i] > first) {
-      second = first;
-      first = orientations[i];
-      best_result.orientation_id = i;
-    } else if (orientations[i] > second) {
-      second = orientations[i];
-    }
-  }
-  // Store difference of top two orientation scores.
-  best_result.oconfidence = first - second;
-}
-
-void OSResults::set_best_orientation(int orientation_id) {
-  best_result.orientation_id = orientation_id;
-  best_result.oconfidence = 0;
-}
-
-void OSResults::update_best_script(int orientation) {
-  // We skip index 0 to ignore the "Common" script.
-  float first = scripts_na[orientation][1];
-  float second = scripts_na[orientation][2];
-  best_result.script_id = 1;
-  if (scripts_na[orientation][1] < scripts_na[orientation][2]) {
-    first = scripts_na[orientation][2];
-    second = scripts_na[orientation][1];
-    best_result.script_id = 2;
-  }
-  for (int i = 3; i < kMaxNumberOfScripts; ++i) {
-    if (scripts_na[orientation][i] > first) {
-      best_result.script_id = i;
-      second = first;
-      first = scripts_na[orientation][i];
-    } else if (scripts_na[orientation][i] > second) {
-      second = scripts_na[orientation][i];
-    }
-  }
-  best_result.sconfidence =
-      (first / second - 1.0) / (kScriptAcceptRatio - 1.0);
-}
-
-// Detect and erase horizontal/vertical lines and picture regions from the
-// image, so that non-text blobs are removed from consideration.
-void remove_nontext_regions(tesseract::Tesseract *tess, BLOCK_LIST *blocks,
-                            TO_BLOCK_LIST *to_blocks) {
-  Pix *pix = tess->pix_binary();
-  ASSERT_HOST(pix != NULL);
-  int vertical_x = 0;
-  int vertical_y = 1;
-  tesseract::TabVector_LIST v_lines;
-  tesseract::TabVector_LIST h_lines;
-  Boxa* boxa = NULL;
-  Pixa* pixa = NULL;
-  const int kMinCredibleResolution = 70;
-  int resolution = (kMinCredibleResolution > pixGetXRes(pix)) ?
-      kMinCredibleResolution : pixGetXRes(pix);
-
-  tesseract::LineFinder::FindVerticalLines(resolution, pix, &vertical_x,
-                                           &vertical_y, &v_lines);
-  tesseract::LineFinder::FindHorizontalLines(resolution, pix, &h_lines);
-  tesseract::ImageFinder::FindImages(pix, &boxa, &pixa);
-  pixaDestroy(&pixa);
-  boxaDestroy(&boxa);
-  tess->mutable_textord()->find_components(tess->pix_binary(),
-                                           blocks, to_blocks);
-}
+CLISTIZEH(BLOBNBOX);
+CLISTIZE(BLOBNBOX);
 
 // Find connected components in the page and process a subset until finished or
 // a stopping criterion is met.
-// Returns the number of blobs used in making the estimate. 0 implies failure.
-int orientation_and_script_detection(STRING& filename,
-                                     OSResults* osr,
-                                     tesseract::Tesseract* tess) {
+// Returns true if the page was successfully processed.
+bool orientation_and_script_detection(STRING& filename,
+                                      OSResults* osr,
+                                      tesseract::Tesseract* tess) {
   STRING name = filename;        //truncated name
   const char *lastdot;           //of name
+  TO_BLOCK_LIST land_blocks, port_blocks;
+  BLOCK_LIST blocks;
   TBOX page_box;
 
   lastdot = strrchr (name.string (), '.');
   if (lastdot != NULL)
     name[lastdot-name.string()] = '\0';
-
-  ASSERT_HOST(tess->pix_binary() != NULL)
-  int width = pixGetWidth(tess->pix_binary());
-  int height = pixGetHeight(tess->pix_binary());
-  int resolution = pixGetXRes(tess->pix_binary());
-  // Zero resolution messes up the algorithms, so make sure it is credible.
-  if (resolution < kMinCredibleResolution)
-    resolution = kDefaultResolution;
-
-  BLOCK_LIST blocks;
-  if (!read_unlv_file(name, width, height, &blocks))
-    FullPageBlock(width, height, &blocks);
-
-  // Try to remove non-text regions from consideration.
-  TO_BLOCK_LIST land_blocks, port_blocks;
-  remove_nontext_regions(tess, &blocks, &port_blocks);
-
-  if (port_blocks.empty()) {
-    // page segmentation did not succeed, so we need to find_components first.
-    tess->mutable_textord()->find_components(tess->pix_binary(),
-                                             &blocks, &port_blocks);
-  } else {
-    page_box.set_left(0);
-    page_box.set_bottom(0);
-    page_box.set_right(width);
-    page_box.set_top(height);
-    // Filter_blobs sets up the TO_BLOCKs the same as find_components does.
-    tess->mutable_textord()->filter_blobs(page_box.topright(),
-                                          &port_blocks, true);
-  }
-
+  if (!read_unlv_file(name, page_image.get_xsize(), page_image.get_ysize(),
+                     &blocks))
+    FullPageBlock(page_image.get_xsize(), page_image.get_ysize(), &blocks);
+  find_components(&blocks, &land_blocks, &port_blocks, &page_box);
   return os_detect(&port_blocks, osr, tess);
 }
 
 // Filter and sample the blobs.
-// Returns a non-zero number of blobs if the page was successfully processed, or
-// zero if the page had too few characters to be reliable
-int os_detect(TO_BLOCK_LIST* port_blocks, OSResults* osr,
-              tesseract::Tesseract* tess) {
+// Returns true if the page was successfully processed, or false if the page had
+// too few characters to be reliable
+bool os_detect(TO_BLOCK_LIST* port_blocks, OSResults* osr,
+               tesseract::Tesseract* tess) {
   int blobs_total = 0;
+  OSResults osr_;
+  if (osr == NULL)
+    osr = &osr_;
+
+  osr->unicharset = &tess->unicharset;
+  OrientationDetector o(osr);
+  ScriptDetector s(osr, tess);
+
   TO_BLOCK_IT block_it;
   block_it.set_to_list(port_blocks);
 
@@ -200,11 +106,9 @@ int os_detect(TO_BLOCK_LIST* port_blocks, OSResults* osr,
 
   for (block_it.mark_cycle_pt(); !block_it.cycled_list();
        block_it.forward ()) {
-    TO_BLOCK* to_block = block_it.data();
-    if (to_block->block->poly_block() &&
-        !to_block->block->poly_block()->IsText()) continue;
+    TO_BLOCK* block = block_it.data();
     BLOBNBOX_IT bbox_it;
-    bbox_it.set_to_list(&to_block->blobs);
+    bbox_it.set_to_list(&block->blobs);
     for (bbox_it.mark_cycle_pt (); !bbox_it.cycled_list ();
          bbox_it.forward ()) {
       BLOBNBOX* bbox = bbox_it.data();
@@ -218,36 +122,22 @@ int os_detect(TO_BLOCK_LIST* port_blocks, OSResults* osr,
       float ratio = x_y > y_x ? x_y : y_x;
       // Blob is ambiguous
       if (ratio > kSizeRatioToReject) continue;
-      if (box.height() < kMinAcceptableBlobHeight) continue;
+      if (box.height() < 10) continue;
       filtered_it.add_to_end(bbox);
     }
   }
-  return os_detect_blobs(&filtered_list, osr, tess);
-}
+  if (filtered_it.length() > 0)
+    filtered_it.move_to_first();
 
-// Detect orientation and script from a list of blobs.
-// Returns a non-zero number of blobs if the list was successfully processed, or
-// zero if the list had too few characters to be reliable
-int os_detect_blobs(BLOBNBOX_CLIST* blob_list, OSResults* osr,
-                    tesseract::Tesseract* tess) {
-  OSResults osr_;
-  if (osr == NULL)
-    osr = &osr_;
-
-  osr->unicharset = &tess->unicharset;
-  OrientationDetector o(osr);
-  ScriptDetector s(osr, tess);
-
-  BLOBNBOX_C_IT filtered_it(blob_list);
   int real_max = MIN(filtered_it.length(), kMaxCharactersToTry);
-  // printf("Total blobs found = %d\n", blobs_total);
-  // printf("Number of blobs post-filtering = %d\n", filtered_it.length());
-  // printf("Number of blobs to try = %d\n", real_max);
+   printf("Total blobs found = %d\n", blobs_total);
+   printf("Number of blobs post-filtering = %d\n", filtered_it.length());
+   printf("Number of blobs to try = %d\n", real_max);
 
   // If there are too few characters, skip this page entirely.
   if (real_max < kMinCharactersToTry / 2) {
     printf("Too few characters. Skipping this page\n");
-    return 0;
+    return false;
   }
 
   BLOBNBOX** blobs = new BLOBNBOX*[filtered_it.length()];
@@ -257,20 +147,18 @@ int os_detect_blobs(BLOBNBOX_CLIST* blob_list, OSResults* osr,
     blobs[number_of_blobs++] = (BLOBNBOX*)filtered_it.data();
   }
   QRSequenceGenerator sequence(number_of_blobs);
-  int num_blobs_evaluated = 0;
   for (int i = 0; i < real_max; ++i) {
     if (os_detect_blob(blobs[sequence.GetVal()], &o, &s, osr, tess)
         && i > kMinCharactersToTry) {
       break;
     }
-    ++num_blobs_evaluated;
   }
   delete [] blobs;
 
   // Make sure the best_result is up-to-date
   int orientation = o.get_orientation();
-  osr->update_best_script(orientation);
-  return num_blobs_evaluated;
+  s.update_best_script(orientation);
+  return true;
 }
 
 // Processes a single blob to estimate script and orientation.
@@ -279,42 +167,56 @@ int os_detect_blobs(BLOBNBOX_CLIST* blob_list, OSResults* osr,
 bool os_detect_blob(BLOBNBOX* bbox, OrientationDetector* o,
                     ScriptDetector* s, OSResults* osr,
                     tesseract::Tesseract* tess) {
-  tess->tess_cn_matching.set_value(true); // turn it on
-  tess->tess_bn_matching.set_value(false);
-  C_BLOB* blob = bbox->cblob();
-  TBLOB* tblob = TBLOB::PolygonalCopy(blob);
-  TBOX box = tblob->bounding_box();
-  FCOORD current_rotation(1.0f, 0.0f);
-  FCOORD rotation90(0.0f, 1.0f);
+  C_BLOB*   blob = bbox->cblob();
+  TBOX      box = blob->bounding_box();
+
+  int       x_mid = (box.left() + box.right()) / 2.0f;
+  int       y_mid = (box.bottom() + box.top()) / 2.0f;
+
+  PBLOB     pblob(blob, box.height());
+
   BLOB_CHOICE_LIST ratings[4];
   // Test the 4 orientations
   for (int i = 0; i < 4; ++i) {
-    // Normalize the blob. Set the origin to the place we want to be the
-    // bottom-middle after rotation.
-    // Scaling is to make the rotated height the x-height.
-    float scaling = static_cast<float>(kBlnXHeight) / box.height();
-    float x_origin = (box.left() + box.right()) / 2.0f;
-    float y_origin = (box.bottom() + box.top()) / 2.0f;
-    if (i == 0 || i == 2) {
-      // Rotation is 0 or 180.
-      y_origin = i == 0 ? box.bottom() : box.top();
-    } else {
-      // Rotation is 90 or 270.
-      scaling = static_cast<float>(kBlnXHeight) / box.width();
-      x_origin = i == 1 ? box.left() : box.right();
+    // normalize the blob
+    pblob.move(FCOORD(-x_mid, -box.bottom()));
+    pblob.scale(static_cast<float>(bln_x_height) / box.height());
+    pblob.move(FCOORD(0.0f, bln_baseline_offset));
+
+    {
+      // List of choices given by the classifier
+      TBLOB *tessblob;               //converted blob
+      TEXTROW tessrow;               //dummy row
+
+      tess_cn_matching.set_value(true); // turn it on
+      tess_bn_matching.set_value(false);
+      //convert blob
+      tessblob = make_tess_blob (&pblob, TRUE);
+      //make dummy row
+      make_tess_row(NULL, &tessrow);
+      //classify
+      tess->AdaptiveClassifier (tessblob, NULL, &tessrow, ratings + i, NULL);
+      free_blob(tessblob);
     }
-    DENORM denorm;
-    denorm.SetupNormalization(NULL, NULL, &current_rotation, NULL, NULL, 0,
-                              x_origin, y_origin, scaling, scaling,
-                              0.0f, static_cast<float>(kBlnBaselineOffset));
-    TBLOB* rotated_blob = new TBLOB(*tblob);
-    rotated_blob->Normalize(denorm);
-    tess->set_denorm(&denorm);
-    tess->AdaptiveClassifier(rotated_blob, ratings + i, NULL);
-    delete rotated_blob;
-    current_rotation.rotate(rotation90);
+    // undo normalize
+    pblob.move(FCOORD(0.0f, -bln_baseline_offset));
+    pblob.scale(1.0f / (static_cast<float>(bln_x_height) / box.height()));
+    pblob.move(FCOORD(x_mid, box.bottom()));
+
+    // center the blob
+    pblob.move(FCOORD(-x_mid, -y_mid));
+
+    // Rotate it
+    pblob.rotate();
+
+    // Re-compute the mid
+    box = pblob.bounding_box();
+    x_mid = (box.left() + box.right()) / 2;
+    y_mid = (box.top() + box.bottom()) / 2;
+
+    // re-center in the new mid
+    pblob.move(FCOORD(x_mid, y_mid));
   }
-  delete tblob;
 
   bool stop = o->detect_blob(ratings);
   s->detect_blob(ratings);
@@ -331,23 +233,13 @@ OrientationDetector::OrientationDetector(OSResults* osr) {
 // Score the given blob and return true if it is now sure of the orientation
 // after adding this block.
 bool OrientationDetector::detect_blob(BLOB_CHOICE_LIST* scores) {
-  float blob_o_score[4] = {0.0, 0.0, 0.0, 0.0};
-  float total_blob_o_score = 0.0;
-
   for (int i = 0; i < 4; ++i) {
     BLOB_CHOICE_IT choice_it;
     choice_it.set_to_list(scores + i);
+
     if (!choice_it.empty()) {
-      // The certainty score ranges between [-20,0]. This is converted here to
-      // [0,1], with 1 indicating best match.
-      blob_o_score[i] = 1 + 0.05 * choice_it.data()->certainty();
-      total_blob_o_score += blob_o_score[i];
+      osr_->orientations[i] += (100 + choice_it.data()->certainty());
     }
-  }
-  // Normalize the orientation scores for the blob and use them to
-  // update the aggregated orientation score.
-  for (int i = 0; total_blob_o_score != 0 && i < 4; ++i) {
-    osr_->orientations[i] += log(blob_o_score[i] / total_blob_o_score);
   }
 
   float first = -1;
@@ -367,9 +259,35 @@ bool OrientationDetector::detect_blob(BLOB_CHOICE_LIST* scores) {
   return first / second > kOrientationAcceptRatio;
 }
 
+void OrientationDetector::update_best_orientation() {
+  float first = osr_->orientations[0];
+  float second = osr_->orientations[1];
+
+  if (first < second) {
+    second = first;
+    first = osr_->orientations[1];
+  }
+
+  osr_->best_result.orientation = 0;
+  osr_->best_result.oconfidence = 0;
+
+  for (int i = 0; i < 4; ++i) {
+    if (osr_->orientations[i] > first) {
+      second = first;
+      first = osr_->orientations[i];
+      osr_->best_result.orientation = i;
+    } else if (osr_->orientations[i] > second) {
+      second = osr_->orientations[i];
+    }
+  }
+
+  osr_->best_result.oconfidence =
+      (first / second - 1.0) / (kOrientationAcceptRatio - 1.0);
+}
+
 int OrientationDetector::get_orientation() {
-  osr_->update_best_orientation();
-  return osr_->best_result.orientation_id;
+  update_best_orientation();
+  return osr_->best_result.orientation;
 }
 
 
@@ -403,7 +321,7 @@ void ScriptDetector::detect_blob(BLOB_CHOICE_LIST* scores) {
     int prev_id = -1;
     int prev_script;
     int prev_class_id = -1;
-    int prev_fontinfo_id = -1;
+    int prev_config = -1;
     const char* prev_unichar = "";
     const char* unichar = "";
     float next_best_score = -1.0;
@@ -427,9 +345,9 @@ void ScriptDetector::detect_blob(BLOB_CHOICE_LIST* scores) {
         prev_script = choice->script_id();
         prev_unichar = unichar;
         prev_class_id = choice->unichar_id();
-        prev_fontinfo_id = choice->fontinfo_id();
+        prev_config = choice->config();
       } else if (-choice->certainty() < prev_score + kNonAmbiguousMargin) {
-        ++script_count;
+        script_count++;
         next_best_score = -choice->certainty();
         next_best_script_id = choice->script_id();
         next_best_unichar = tess_->unicharset.id_to_unichar(choice->unichar_id());
@@ -447,31 +365,33 @@ void ScriptDetector::detect_blob(BLOB_CHOICE_LIST* scores) {
     // Character is non ambiguous
     if (script_count == 1) {
       // Update the score of the winning script
-      osr_->scripts_na[i][prev_id] += 1.0;
+      osr_->scripts_na[i][prev_id] += 1;
 
       // Workaround for Fraktur
       if (prev_id == latin_id_) {
-        if (prev_fontinfo_id >= 0) {
-          const FontInfo &fi =
-              tess_->get_fontinfo_table().get(prev_fontinfo_id);
+        int font_set_id = tess_->PreTrainedTemplates->
+            Class[prev_class_id]->font_set_id;
+        if (font_set_id >= 0 && prev_config >= 0) {
+          FontInfo fi = tess_->get_fontinfo_table().get(
+              tess_->get_fontset_table().get(font_set_id).configs[prev_config]);
           //printf("Font: %s i:%i b:%i f:%i s:%i k:%i (%s)\n", fi.name,
           //       fi.is_italic(), fi.is_bold(), fi.is_fixed_pitch(),
           //       fi.is_serif(), fi.is_fraktur(),
           //       prev_unichar);
           if (fi.is_fraktur()) {
-            osr_->scripts_na[i][prev_id] -= 1.0;
-            osr_->scripts_na[i][fraktur_id_] += 1.0;
+            osr_->scripts_na[i][prev_id] -= 1;
+            osr_->scripts_na[i][fraktur_id_] += 1;
           }
         }
       }
 
       // Update Japanese / Korean pseudo-scripts
       if (prev_id == katakana_id_)
-        osr_->scripts_na[i][japanese_id_] += 1.0;
+        osr_->scripts_na[i][japanese_id_] += 1;
       if (prev_id == hiragana_id_)
-        osr_->scripts_na[i][japanese_id_] += 1.0;
+        osr_->scripts_na[i][japanese_id_] += 1;
       if (prev_id == hangul_id_)
-        osr_->scripts_na[i][korean_id_] += 1.0;
+        osr_->scripts_na[i][korean_id_] += 1;
       if (prev_id == han_id_)
         osr_->scripts_na[i][korean_id_] += kHanRatioInKorean;
       if (prev_id == han_id_)
@@ -481,24 +401,27 @@ void ScriptDetector::detect_blob(BLOB_CHOICE_LIST* scores) {
 }
 
 bool ScriptDetector::must_stop(int orientation) {
-  osr_->update_best_script(orientation);
+  update_best_script(orientation);
   return osr_->best_result.sconfidence > 1;
 }
 
-// Helper method to convert an orientation index to its value in degrees.
-// The value represents the amount of clockwise rotation in degrees that must be
-// applied for the text to be upright (readable).
-const int OrientationIdToValue(const int& id) {
-  switch (id) {
-    case 0:
-      return 0;
-    case 1:
-      return 270;
-    case 2:
-      return 180;
-    case 3:
-      return 90;
-    default:
-      return -1;
+
+void ScriptDetector::update_best_script(int orientation) {
+  float first = -1;
+  float second = -1;
+
+  // i = 1 -> ignore Common scripts
+  for (int i = 1; i < kMaxNumberOfScripts; ++i) {
+    if (osr_->scripts_na[orientation][i] > first) {
+      osr_->best_result.script =
+          tess_->unicharset.get_script_from_script_id(i);
+      second = first;
+      first = osr_->scripts_na[orientation][i];
+    } else if (osr_->scripts_na[orientation][i] > second) {
+      second = osr_->scripts_na[orientation][i];
+    }
   }
+
+  osr_->best_result.sconfidence =
+      (first / second - 1.0) / (kOrientationAcceptRatio - 1.0);
 }

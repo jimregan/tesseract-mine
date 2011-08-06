@@ -22,7 +22,8 @@
           Include Files and Type Defines
 ----------------------------------------------------------------------------**/
 #include "ocrfeatures.h"
-#include "blobs.h"
+#include "tessclas.h"
+#include "fxdefs.h"
 
 typedef enum {
   MFXPosition, MFYPosition,
@@ -31,6 +32,10 @@ typedef enum {
 /*----------------------------------------------------------------------------
           Private Function Prototypes
 -----------------------------------------------------------------------------*/
-FEATURE_SET ExtractMicros(TBLOB *Blob, const DENORM& denorm);
+FEATURE_SET ExtractMicros(TBLOB *Blob, LINE_STATS *LineStats);
 
+/**----------------------------------------------------------------------------
+        Global Data Definitions and Declarations
+----------------------------------------------------------------------------**/
+extern FEATURE_DESC_STRUCT MicroFeatureDesc;
 #endif

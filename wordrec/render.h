@@ -27,7 +27,7 @@
 
 #include "host.h"
 #include "callcpp.h"
-#include "blobs.h"
+#include "tessclas.h"
 
 /*----------------------------------------------------------------------
               V a r i a b l e s

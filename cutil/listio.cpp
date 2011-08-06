@@ -49,9 +49,9 @@ LIST read_list(const char *filename) {
   char *chopAt250();
 
   if ((infile = open_file (filename, "r")) == NULL)
-    return (NIL_LIST);
+    return (NIL);
 
-  list = NIL_LIST;
+  list = NIL;
   while (fgets (s, CHARS_PER_LINE, infile) != NULL) {
     s[CHARS_PER_LINE - 1] = '\0';
     if (strlen (s) > 0) {

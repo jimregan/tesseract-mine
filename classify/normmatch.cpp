@@ -33,7 +33,7 @@
 #include "normfeat.h"
 #include "scanutils.h"
 #include "unicharset.h"
-#include "params.h"
+#include "varable.h"
 
 struct NORM_PROTOS
 {
@@ -46,7 +46,7 @@ struct NORM_PROTOS
 /**----------------------------------------------------------------------------
           Private Function Prototypes
 ----------------------------------------------------------------------------**/
-double NormEvidenceOf(register double NormAdj);
+FLOAT32 NormEvidenceOf(register FLOAT32 NormAdj);
 
 void PrintNormMatch(FILE *File,
                     int NumParams,
@@ -62,8 +62,6 @@ NORM_PROTOS *ReadNormProtos(FILE *File);
 /* control knobs used to control the normalization adjustment process */
 double_VAR(classify_norm_adj_midpoint, 32.0, "Norm adjust midpoint ...");
 double_VAR(classify_norm_adj_curl, 2.0, "Norm adjust curl ...");
-// Weight of width variance against height and vertical position.
-const double kWidthErrorWeighting = 0.125;
 
 /**----------------------------------------------------------------------------
               Public Code
@@ -120,11 +118,6 @@ FLOAT32 Classify::ComputeNormMatch(CLASS_ID ClassId, FEATURE Feature,
     Match = Delta * Delta * Proto->Weight.Elliptical[CharNormY];
     Delta = Feature->Params[CharNormRx] - Proto->Mean[CharNormRx];
     Match += Delta * Delta * Proto->Weight.Elliptical[CharNormRx];
-    // Ry is width! See intfx.cpp.
-    Delta = Feature->Params[CharNormRy] - Proto->Mean[CharNormRy];
-    Delta = Delta * Delta * Proto->Weight.Elliptical[CharNormRy];
-    Delta *= kWidthErrorWeighting;
-    Match += Delta;
 
     if (Match < BestMatch)
       BestMatch = Match;
@@ -165,7 +158,7 @@ void Classify::FreeNormProtos() {
  * normalization adjustment.  The equation that represents the transform is:
  *       1 / (1 + (NormAdj / midpoint) ^ curl)
  **********************************************************************/
-double NormEvidenceOf(register double NormAdj) {
+FLOAT32 NormEvidenceOf(register FLOAT32 NormAdj) {
   NormAdj /= classify_norm_adj_midpoint;
 
   if (classify_norm_adj_curl == 3)
@@ -173,7 +166,7 @@ double NormEvidenceOf(register double NormAdj) {
   else if (classify_norm_adj_curl == 2)
     NormAdj = NormAdj * NormAdj;
   else
-    NormAdj = pow (NormAdj, classify_norm_adj_curl);
+    NormAdj = pow(static_cast<double>(NormAdj), classify_norm_adj_curl);
   return (1.0 / (1.0 + NormAdj));
 }
 
@@ -240,7 +233,7 @@ NORM_PROTOS *Classify::ReadNormProtos(FILE *File, inT64 end_offset) {
   NormProtos->NumProtos = unicharset.size();
   NormProtos->Protos = (LIST *) Emalloc (NormProtos->NumProtos * sizeof(LIST));
   for (i = 0; i < NormProtos->NumProtos; i++)
-    NormProtos->Protos[i] = NIL_LIST;
+    NormProtos->Protos[i] = NIL;
 
   /* read file header and save in data structure */
   NormProtos->NumParams = ReadSampleSize (File);

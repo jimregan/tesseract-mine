@@ -124,18 +124,7 @@ void* ScrollView::MessageReceiver(void* a) {
           cur->parameter[strlen(p)] = '\0';
         }
         cur->type = static_cast<SVEventType>(ev_type);
-        // Correct selection coordinates so x,y is the min pt and size is +ve.
-        if (cur->x_size > 0)
-          cur->x -= cur->x_size;
-        else
-          cur->x_size = -cur->x_size;
-        if (cur->y_size > 0)
-          cur->y -= cur->y_size;
-        else
-          cur->y_size = -cur->y_size;
-        // Returned y will be the bottom-left if y is reversed.
-        if (cur->window->y_axis_is_reversed_)
-          cur->y = cur->window->TranslateYCoordinate(cur->y + cur->y_size);
+        cur->y = cur->window->TranslateYCoordinate(cur->y);
         cur->counter = counter_event_id;
         // Increase by 2 since we will also create an SVET_ANY event from cur,
         // which will have a counter_id of cur + 1 (and thus gets processed
@@ -247,7 +236,6 @@ int table_colors[ScrollView::GREEN_YELLOW+1][4]= {
 
 SVNetwork* ScrollView::stream_ = NULL;
 int ScrollView::nr_created_windows_ = 0;
-int ScrollView::image_index_ = 0;
 
 /// Calls Initialize with all arguments given.
 ScrollView::ScrollView(const char* name, int x_pos, int y_pos, int x_size,
@@ -770,9 +758,8 @@ void ScrollView::Image(PIX* image, int x_pos, int y_pos) {
   int width = image->w;
   int height = image->h;
   l_uint32 bpp = image->d;
-  ++image_index_;
   // PIX* do not have a unique identifier/name associated, so name them "lept".
-  SendMsg("createImage('lept%d',%d,%d,%d)", image_index_, width, height, bpp);
+  SendMsg("createImage('%s',%d,%d,%d)", "lept", width, height, bpp);
 
   if (bpp == 32) {
     Transfer32bppImage(image);
@@ -782,7 +769,7 @@ void ScrollView::Image(PIX* image, int x_pos, int y_pos) {
     TransferBinaryImage(image);
   }
   // PIX* do not have a unique identifier/name associated, so name them "lept".
-  SendMsg("drawImage('lept%d',%d,%d)", image_index_, x_pos, y_pos);
+  SendMsg("drawImage('%s',%d,%d)", "lept", x_pos, y_pos);
 }
 
 // Sends each pixel as hex value like html, e.g. #00FF00 for green.

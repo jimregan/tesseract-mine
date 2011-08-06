@@ -26,7 +26,6 @@
               I n c l u d e s
 ----------------------------------------------------------------------*/
 #include "gradechop.h"
-#include "wordrec.h"
 #include "olutil.h"
 #include "chop.h"
 #include "ndminx.h"
@@ -59,8 +58,6 @@
 	while (this_point != point2 && this_point != point1) \
 
 
-namespace tesseract {
-
 /*----------------------------------------------------------------------
               F u n c t i o n s
 ----------------------------------------------------------------------*/
@@ -71,7 +68,7 @@ namespace tesseract {
  * Part of the priority has already been calculated so just return the
  * additional amount for the bounding box type information.
  **********************************************************************/
-PRIORITY Wordrec::full_split_priority(SPLIT *split, inT16 xmin, inT16 xmax) {
+PRIORITY full_split_priority(SPLIT *split, inT16 xmin, inT16 xmax) {
   BOUNDS_RECT rect;
 
   set_outline_bounds (split->point1, split->point2, rect);
@@ -92,7 +89,7 @@ PRIORITY Wordrec::full_split_priority(SPLIT *split, inT16 xmin, inT16 xmax) {
  *   0    =  "perfect"
  *   100  =  "no way jay"
  **********************************************************************/
-PRIORITY Wordrec::grade_center_of_blob(register BOUNDS_RECT rect) {
+PRIORITY grade_center_of_blob(register BOUNDS_RECT rect) {
   register PRIORITY grade;
 
   grade = (rect[1] - rect[0]) - (rect[3] - rect[2]);
@@ -112,7 +109,7 @@ PRIORITY Wordrec::grade_center_of_blob(register BOUNDS_RECT rect) {
  *   0    =  "perfect"
  *   100  =  "no way jay"
  **********************************************************************/
-PRIORITY Wordrec::grade_overlap(register BOUNDS_RECT rect) {
+PRIORITY grade_overlap(register BOUNDS_RECT rect) {
   register PRIORITY grade;
   register inT16 width1;
   register inT16 width2;
@@ -142,7 +139,7 @@ PRIORITY Wordrec::grade_overlap(register BOUNDS_RECT rect) {
  *   0    =  "perfect"
  *   100  =  "no way jay"
  **********************************************************************/
-PRIORITY Wordrec::grade_split_length(register SPLIT *split) {
+PRIORITY grade_split_length(register SPLIT *split) {
   register PRIORITY grade;
   register float split_length;
 
@@ -165,7 +162,7 @@ PRIORITY Wordrec::grade_split_length(register SPLIT *split) {
  *   0    =  "perfect"
  *   100  =  "no way jay"
  **********************************************************************/
-PRIORITY Wordrec::grade_sharpness(register SPLIT *split) {
+PRIORITY grade_sharpness(register SPLIT *split) {
   register PRIORITY grade;
 
   grade = point_priority (split->point1) + point_priority (split->point2);
@@ -188,7 +185,7 @@ PRIORITY Wordrec::grade_sharpness(register SPLIT *split) {
  *   0    =  "perfect"
  *   100  =  "no way jay"
  **********************************************************************/
-PRIORITY Wordrec::grade_width_change(register BOUNDS_RECT rect) {
+PRIORITY grade_width_change(register BOUNDS_RECT rect) {
   register PRIORITY grade;
   register inT32 width1;
   register inT32 width2;
@@ -210,9 +207,9 @@ PRIORITY Wordrec::grade_width_change(register BOUNDS_RECT rect) {
  *
  * Set up the limits for the x coordinate of the outline.
  **********************************************************************/
-void Wordrec::set_outline_bounds(register EDGEPT *point1,
-                                 register EDGEPT *point2,
-                                 BOUNDS_RECT rect) {
+void set_outline_bounds(register EDGEPT *point1,
+                        register EDGEPT *point2,
+                        BOUNDS_RECT rect) {
   register EDGEPT *this_point;
   register inT16 x_min;
   register inT16 x_max;
@@ -227,5 +224,3 @@ void Wordrec::set_outline_bounds(register EDGEPT *point1,
   rect[2] = x_min;
   rect[3] = x_max;
 }
-
-}  // namespace tesseract

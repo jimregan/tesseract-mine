@@ -43,6 +43,7 @@
 #include          "imgerrs.h"
 #include          "memry.h"
 #include          "imgs.h"
+#include          "imgio.h"
 #include          "imgunpk.h"
 
 #define FIXED_COLOURS   32       /*number of fixed colours */
@@ -1491,8 +1492,10 @@ void IMAGE::check_legal_access(            //check coords are legal
   if (x < 0 || x >= xsize || y < 0 || y >= ysize || x + xext > xsize)
     BADIMAGECOORDS.error ("IMAGE::check_legal_access",
       ABORT, "(%d+%d,%d)", x, xext, y);
-  if (y < ymin || y >= ymax)
+  if (y >= ymax)
     BADIMAGESEEK.error ("IMAGE::check_legal_access", ABORT, "(%d,%d)", x, y);
+  if (y < ymin)
+    bufread(y);  //read some more
 }
 
 #ifdef HAVE_LIBLEPT

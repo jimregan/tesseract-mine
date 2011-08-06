@@ -20,7 +20,7 @@
 #ifndef           DRAWTORD_H
 #define           DRAWTORD_H
 
-#include          "params.h"
+#include          "varable.h"
 #include          "scrollview.h"
 #include          "pitsync1.h"
 #include          "blobbox.h"

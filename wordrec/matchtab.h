@@ -25,36 +25,25 @@
 #ifndef MATCHTAB_H
 #define MATCHTAB_H
 
+/*----------------------------------------------------------------------
+              I n c l u d e s
+----------------------------------------------------------------------*/
+
 #include "ratngs.h"
-#include "blobs.h"
+#include "tessclas.h"
 
-namespace tesseract {
+/*----------------------------------------------------------------------
+              F u n c t i o n s
+----------------------------------------------------------------------*/
+void init_match_table();
+void end_match_table();
 
-typedef struct _MATCH_
-{
-  int topleft;
-  int botright;
-  BLOB_CHOICE_LIST *rating;
-} MATCH;
+void put_match(TBLOB *blob, BLOB_CHOICE_LIST *ratings);
 
+BLOB_CHOICE_LIST *get_match(TBLOB *blob);
 
-class BlobMatchTable {
- public:
-  BlobMatchTable();
-  ~BlobMatchTable();
+BLOB_CHOICE_LIST *get_match_by_bounds(unsigned int topleft,
+                                      unsigned int botright);
 
-  void init_match_table();
-  void end_match_table();
-  void put_match(TBLOB *blob, BLOB_CHOICE_LIST *ratings);
-  BLOB_CHOICE_LIST *get_match(TBLOB *blob);
-  BLOB_CHOICE_LIST *get_match_by_bounds(unsigned int topleft,
-                                        unsigned int botright);
-  void add_to_match(TBLOB *blob, BLOB_CHOICE_LIST *ratings);
-
- private:
-  bool been_initialized_;
-  MATCH* match_table_;
-};
-
-}
+void add_to_match(TBLOB *blob, BLOB_CHOICE_LIST *ratings);
 #endif

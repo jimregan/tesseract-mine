@@ -22,43 +22,59 @@
           Include Files and Type Defines
 ----------------------------------------------------------------------------**/
 
-#include "genericvector.h"
-#include "params.h"
 #include "states.h"
 #include "unichar.h"
+#include "varable.h"
 
 typedef uinT8 BLOB_WIDTH;
 
-struct DANGERR_INFO {
-  DANGERR_INFO() :
-    begin(-1), end(-1), dangerous(false), correct_is_ngram(false) {}
-  DANGERR_INFO(int b, int e, bool d, bool n) :
-    begin(b), end(e), dangerous(d), correct_is_ngram(n) {}
-  int begin;
-  int end;
-  bool dangerous;
-  bool correct_is_ngram;
-};
-
-typedef GenericVector<DANGERR_INFO> DANGERR;
+typedef struct
+{
+  inT16 index;
+  unsigned bad_length:8;
+  unsigned good_length:8;
+} DANGERR;
 
 enum ACCEPTABLE_CHOICE_CALLER { CHOPPER_CALLER, ASSOCIATOR_CALLER };
-
-struct CHAR_CHOICE {
+typedef struct
+{
   UNICHAR_ID Class;
   uinT16 NumChunks;
   float Certainty;
-};
+}
 
-struct VIABLE_CHOICE_STRUCT {
+
+CHAR_CHOICE;
+
+typedef struct
+{
   float Rating;
   float Certainty;
   FLOAT32 AdjustFactor;
   int Length;
   bool ComposedFromCharFragments;
   CHAR_CHOICE Blob[1];
-};
-
+} VIABLE_CHOICE_STRUCT;
 typedef VIABLE_CHOICE_STRUCT *VIABLE_CHOICE;
+
+/*---------------------------------------------------------------------------
+          Variables
+---------------------------------------------------------------------------*/
+extern double_VAR_H(stopper_certainty_per_char, -0.50,
+     "Certainty to add for each dict char above small word size.");
+
+extern double_VAR_H(stopper_nondict_certainty_base, -2.50,
+    "Certainty threshold for non-dict words");
+
+extern double_VAR_H(stopper_phase2_certainty_rejection_offset, 1.0,
+           "Reject certainty offset");
+
+extern INT_VAR_H(stopper_debug_level, 0, "Stopper debug level");
+
+extern BOOL_VAR_H(stopper_no_acceptable_choices, false,
+                  "Make AcceptableChoice() always return false. Useful"
+                  " when there is a need to explore all segmentations");
+
+extern BOOL_VAR_H(save_raw_choices, false, "Save all explored raw choices");
 
 #endif

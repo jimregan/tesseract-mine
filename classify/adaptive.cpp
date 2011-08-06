@@ -86,6 +86,7 @@ void FreeTempConfig(TEMP_CONFIG Config) {
 
 }                                /* FreeTempConfig */
 
+
 /*---------------------------------------------------------------------------*/
 void FreeTempProto(void *arg) {
   PROTO proto = (PROTO) arg;
@@ -93,11 +94,6 @@ void FreeTempProto(void *arg) {
   free_struct (proto, sizeof (TEMP_PROTO_STRUCT), "TEMP_PROTO_STRUCT");
 }
 
-void FreePermConfig(PERM_CONFIG Config) {
-  assert(Config != NULL);
-  Efree(Config->Ambigs);
-  free_struct(Config, sizeof(PERM_CONFIG_STRUCT), "PERM_CONFIG_STRUCT");
-}
 
 /*---------------------------------------------------------------------------*/
 /**
@@ -116,8 +112,7 @@ ADAPT_CLASS NewAdaptedClass() {
 
   Class = (ADAPT_CLASS) Emalloc (sizeof (ADAPT_CLASS_STRUCT));
   Class->NumPermConfigs = 0;
-  Class->MaxNumTimesSeen = 0;
-  Class->TempProtos = NIL_LIST;
+  Class->TempProtos = NIL;
 
   Class->PermProtos = NewBitVector (MAX_NUM_PROTOS);
   Class->PermConfigs = NewBitVector (MAX_NUM_CONFIGS);
@@ -139,7 +134,7 @@ void free_adapted_class(ADAPT_CLASS adapt_class) {
   for (i = 0; i < MAX_NUM_CONFIGS; i++) {
     if (ConfigIsPermanent (adapt_class, i)
       && PermConfigFor (adapt_class, i) != NULL)
-      FreePermConfig (PermConfigFor (adapt_class, i));
+      Efree (PermConfigFor (adapt_class, i));
     else if (!ConfigIsPermanent (adapt_class, i)
       && TempConfigFor (adapt_class, i) != NULL)
       FreeTempConfig (TempConfigFor (adapt_class, i));
@@ -185,14 +180,6 @@ ADAPT_TEMPLATES Classify::NewAdaptedTemplates(bool InitFromUnicharset) {
   return (Templates);
 
 }                                /* NewAdaptedTemplates */
-
-// Returns FontinfoId of the given config of the given adapted class.
-int Classify::GetFontinfoId(ADAPT_CLASS Class, uinT8 ConfigId) {
-  return (ConfigIsPermanent(Class, ConfigId) ?
-      PermConfigFor(Class, ConfigId)->FontinfoId :
-      TempConfigFor(Class, ConfigId)->FontinfoId);
-}
-
 }  // namespace tesseract
 
 /*----------------------------------------------------------------------------*/
@@ -213,14 +200,13 @@ void free_adapted_templates(ADAPT_TEMPLATES templates) {
  * This routine allocates and returns a new temporary config.
  *
  * @param MaxProtoId  max id of any proto in new config
- * @param FontinfoId font information from pre-trained templates
  * @return Ptr to new temp config.
  *
  * @note Globals: none
  * @note Exceptions: none
  * @note History: Thu Mar 14 13:28:21 1991, DSJ, Created.
  */
-TEMP_CONFIG NewTempConfig(int MaxProtoId, int FontinfoId) {
+TEMP_CONFIG NewTempConfig(int MaxProtoId) {
   TEMP_CONFIG Config;
   int NumProtos = MaxProtoId + 1;
 
@@ -232,9 +218,8 @@ TEMP_CONFIG NewTempConfig(int MaxProtoId, int FontinfoId) {
   Config->NumTimesSeen = 1;
   Config->MaxProtoId = MaxProtoId;
   Config->ProtoVectorSize = WordsInVectorOfSize (NumProtos);
-  Config->ContextsSeen = NIL_LIST;
+  Config->ContextsSeen = NIL;
   zero_all_bits (Config->Protos, Config->ProtoVectorSize);
-  Config->FontinfoId = FontinfoId;
 
   return (Config);
 
@@ -333,7 +318,7 @@ ADAPT_CLASS ReadAdaptedClass(FILE *File) {
 
   /* then read in the list of temporary protos */
   fread ((char *) &NumTempProtos, sizeof (int), 1, File);
-  Class->TempProtos = NIL_LIST;
+  Class->TempProtos = NIL;
   for (i = 0; i < NumTempProtos; i++) {
     TempProto =
       (TEMP_PROTO) alloc_struct (sizeof (TEMP_PROTO_STRUCT),
@@ -402,14 +387,13 @@ ADAPT_TEMPLATES Classify::ReadAdaptedTemplates(FILE *File) {
  * @note History: Tue Mar 19 14:25:26 1991, DSJ, Created.
  */
 PERM_CONFIG ReadPermConfig(FILE *File) {
-  PERM_CONFIG Config = (PERM_CONFIG) alloc_struct(sizeof(PERM_CONFIG_STRUCT),
-                                                  "PERM_CONFIG_STRUCT");
+  PERM_CONFIG Config;
   uinT8 NumAmbigs;
-  fread ((char *) &NumAmbigs, sizeof(uinT8), 1, File);
-  Config->Ambigs = (UNICHAR_ID *)Emalloc(sizeof(UNICHAR_ID) * (NumAmbigs + 1));
-  fread(Config->Ambigs, sizeof(UNICHAR_ID), NumAmbigs, File);
-  Config->Ambigs[NumAmbigs] = -1;
-  fread(&(Config->FontinfoId), sizeof(int), 1, File);
+
+  fread ((char *) &NumAmbigs, sizeof (uinT8), 1, File);
+  Config = (PERM_CONFIG) Emalloc (sizeof (UNICHAR_ID) * (NumAmbigs + 1));
+  fread (Config, sizeof (UNICHAR_ID), NumAmbigs, File);
+  Config[NumAmbigs] = -1;
 
   return (Config);
 
@@ -538,11 +522,12 @@ void WritePermConfig(FILE *File, PERM_CONFIG Config) {
   uinT8 NumAmbigs = 0;
 
   assert (Config != NULL);
-  while (Config->Ambigs[NumAmbigs] > 0) ++NumAmbigs;
+  while (Config[NumAmbigs] > 0)
+    ++NumAmbigs;
 
-  fwrite((char *) &NumAmbigs, sizeof(uinT8), 1, File);
-  fwrite(Config->Ambigs, sizeof(UNICHAR_ID), NumAmbigs, File);
-  fwrite(&(Config->FontinfoId), sizeof(int), 1, File);
+  fwrite ((char *) &NumAmbigs, sizeof (uinT8), 1, File);
+  fwrite (Config, sizeof (UNICHAR_ID), NumAmbigs, File);
+
 }                                /* WritePermConfig */
 
 

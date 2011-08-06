@@ -32,7 +32,7 @@
 #include "cutil.h"
 #include "unichar.h"
 #include "unicity_table.h"
-#include "params.h"
+#include "varable.h"
 
 /*----------------------------------------------------------------------
               T y p e s

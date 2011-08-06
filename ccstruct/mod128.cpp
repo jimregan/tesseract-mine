@@ -20,7 +20,7 @@
 #include          "mfcpch.h"     //precompiled headers
 #include          "mod128.h"
 
-const inT16 idirtab[] = {
+static inT16 idirtab[] = {
   1000, 0, 998, 49, 995, 98, 989, 146,
   980, 195, 970, 242, 956, 290, 941, 336,
   923, 382, 903, 427, 881, 471, 857, 514,
@@ -55,7 +55,7 @@ const inT16 idirtab[] = {
   980, -195, 989, -146, 995, -98, 998, -49
 };
 
-const ICOORD *dirtab = (ICOORD *) idirtab;
+static ICOORD *dirtab = (ICOORD *) idirtab;
 
 /**********************************************************************
  * DIR128::DIR128
