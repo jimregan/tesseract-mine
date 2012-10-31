@@ -26,7 +26,6 @@ Dependencies and Licenses
 
 Leptonica is required. (www.leptonica.com). Tesseract no longer compiles
 without Leptonica.
-Libtiff is no longer required as a direct dependency.
 
 
 Installing and Running Tesseract
@@ -95,7 +94,6 @@ find its data directory. You must either:
 ./configure
 make
 make install
-sudo ldconfig
 
 to move the data files to the standard place, or:
 

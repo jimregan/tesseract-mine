@@ -1,4 +1,5 @@
-AM_CPPFLAGS += \
+SUBDIRS =
+AM_CPPFLAGS = \
     -DUSE_STD_NAMESPACE \
     -I$(top_srcdir)/ccutil -I$(top_srcdir)/ccstruct \
     -I$(top_srcdir)/image -I$(top_srcdir)/viewer \
@@ -6,20 +7,17 @@ AM_CPPFLAGS += \
     -I$(top_srcdir)/wordrec -I$(top_srcdir)/cutil \
     -I$(top_srcdir)/neural_networks/runtime -I$(top_srcdir)/cube \
     -I$(top_srcdir)/textord
-    
-if VISIBILITY
-AM_CPPFLAGS += -DTESS_EXPORTS \
-    -fvisibility=hidden -fvisibility-inlines-hidden
-endif
 
 include_HEADERS = \
-	thresholder.h ltrresultiterator.h pageiterator.h resultiterator.h
-noinst_HEADERS = \
-    control.h cube_reco_context.h cubeclassifier.h docqual.h \
-    equationdetect.h fixspace.h imgscale.h mutableiterator.h osdetect.h \
-    output.h paragraphs.h paragraphs_internal.h paramsd.h pgedit.h \
-    reject.h scaleimg.h tessbox.h tessedit.h tesseractclass.h \
-    tesseract_cube_combiner.h tessvars.h tfacep.h tfacepp.h werdit.h
+    control.h cube_reco_context.h cubeclassifier.h \
+    docqual.h equationdetect.h fixspace.h \
+    imgscale.h ltrresultiterator.h mutableiterator.h osdetect.h output.h \
+    pageiterator.h paragraphs.h paragraphs_internal.h paramsd.h pgedit.h \
+    reject.h resultiterator.h scaleimg.h \
+    tessbox.h tessedit.h tesseractclass.h \
+    tesseract_cube_combiner.h \
+    tessvars.h tfacep.h tfacepp.h thresholder.h \
+    werdit.h
 
 if !USING_MULTIPLELIBS
 noinst_LTLIBRARIES = libtesseract_main.la

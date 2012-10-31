@@ -1,14 +1,13 @@
 #!/bin/bash
-# Requirement: tesseract directory name should be "tesseract-ocr"
+# Requirement: tesseract directory name must be "tesseract-ocr" otherwise
+# script will not work
 
-source_dir=${PWD##*/}
-tess_ver=3.02
-src_min_ver=.02
-ver=$source_dir-$tess_ver
+# get version information
+version=`grep PACKAGE_VERSION= configure | sed -e "s/PACKAGE_VERSION=//" | sed -e "s/'//g"`
+ver=tesseract-ocr-$version
 excld="exclude.txt"
-
 cd ..
-echo Output for $source_dir is in `pwd` ...
+echo Output for $ver is in `pwd`...
 
 # create language files packages
 if [ -f $excld ] 
@@ -17,33 +16,23 @@ then
 	rm -f $excld
 fi
 
-for l in $source_dir/tessdata/*.traineddata
+for l in tesseract-ocr/tessdata/*.traineddata
 do
-	filename=`basename "$l"`
-	lang=${filename%.*}
-	echo  Creating language package for `basename "$l"`...
-	chmod 644 $source_dir/tessdata/*$lang*
-	tar --group root --owner root -chozf $ver.`basename "$l" .traineddata`.tar.gz $source_dir/tessdata/*$lang*
-	echo $source_dir/tessdata/*$lang* | tr " " "\n" >>$excld
+	echo  Creating language package for `basename "$l" .traineddata`...
+	chmod 644 ${l%%.*}.*
+        tar --group root --owner root -chozf $ver.`basename "$l" .traineddata`.tar.gz ${l%%.*}.*
+	echo ${l%%.*}.* | tr " " "\n" >>$excld
 done
 
-# Windows build relevant files
-name=$ver-win_vs2008
-# Let's be nice and use common windows packager ;-)
-zip -9 -r --exclude=*.svn* --exclude=*strtok_r* $name.zip $source_dir/vs2008/
-
 # create linux source package
-echo Creating linux source package $ver$src_min_ver.tar.gz ...
-tar -chf $ver$src_min_ver.tar --exclude=.svn --exclude=debian --exclude=autom4te.cache --exclude=doc/html --exclude=po/ --exclude=m4/ --exclude=makemoredists --exclude=vs2008 -exclude=INSTALL.SVN -X $excld $source_dir/*
-#workaround to include strtok_r from vs2008 for mingw
-tar -rf $ver$src_min_ver.tar $source_dir/vs2008/port/strtok_r.*
-gzip $ver$src_min_ver.tar
-
-# create doc and package doc
-cd $source_dir
-doxygen doc/Doxyfile
-cd ..
-tar -chzf $ver-doc-html.tar.gz $source_dir/doc/html/*
-
+tar -chzf tesseract-ocr-$version.tar.gz --exclude=.svn --exclude=vs2008 --exclude=vs2010 -X $excld tesseract-ocr/*
 rm -f $excld
-cd $source_dir
+
+# Windows build relevant files
+name=$ver-win_vs
+# Let's be nice and use common windows packager ;-)
+zip $name.zip tesseract-ocr/vs2008/* tesseract-ocr/vs2008/include/* tesseract-ocr/vs2008/include/leptonica/* tesseract-ocr/vs2008/port/* tesseract-ocr/vs2008/lib/* tesseract-ocr/vs2010/* tesseract-ocr/vs2010/include/* tesseract-ocr/vs2010/include/leptonica/* tesseract-ocr/vs2010/port/*
+
+# create doc
+doxygen tesseract-ocr/doc/Doxyfile
+tar -chzf $ver-doc-html.tar.gz tesseract-ocr/doc/html/*

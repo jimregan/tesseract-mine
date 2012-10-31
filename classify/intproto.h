@@ -239,7 +239,6 @@ void ClearFeatureSpaceWindow(NORM_METHOD norm_method, ScrollView* window);
 }  // namespace tesseract.
 
 /*----------------------------------------------------------------------------*/
-#ifndef GRAPHICS_DISABLED
 void RenderIntFeature(ScrollView *window, const INT_FEATURE_STRUCT* Feature,
                       ScrollView::Color color);
 
@@ -252,6 +251,5 @@ void InitFeatureDisplayWindowIfReqd();
 // Creates a window of the appropriate size for displaying elements
 // in feature space.
 ScrollView* CreateFeatureSpaceWindow(const char* name, int xpos, int ypos);
-#endif  // GRAPHICS_DISABLED
 
 #endif

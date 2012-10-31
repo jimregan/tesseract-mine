@@ -28,7 +28,7 @@ const int kDictDebugLevel = 1;
 tesseract::Dawg *LoadSquishedDawg(const UNICHARSET &unicharset,
                                   const char *filename) {
   const int kDictDebugLevel = 1;
-  FILE *dawg_file = fopen(filename, "rb");
+  FILE *dawg_file = fopen(filename, "r");
   if (dawg_file == NULL) {
     tprintf("Could not open %s for reading.\n", filename);
     return NULL;
@@ -54,7 +54,7 @@ class WordOutputter {
 int WriteDawgAsWordlist(const UNICHARSET &unicharset,
                         const tesseract::Dawg *dawg,
                         const char *outfile_name) {
-  FILE *out = fopen(outfile_name, "wb");
+  FILE *out = fopen(outfile_name, "w");
   if (out == NULL) {
     tprintf("Could not open %s for writing.\n", outfile_name);
     return 1;

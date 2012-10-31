@@ -101,20 +101,17 @@ static void ExpandChoice(VIABLE_CHOICE Choice,
 VIABLE_CHOICE_STRUCT::VIABLE_CHOICE_STRUCT(int length)
     : Length(length) {
   Blob = new CHAR_CHOICE[length];
-  blob_choices = NULL;
+  segmentation_state = new uinT8[length];
 }
 
 VIABLE_CHOICE_STRUCT::VIABLE_CHOICE_STRUCT() : Length(0) {
   Blob = NULL;
-  blob_choices = NULL;
+  segmentation_state = NULL;
 }
 
 VIABLE_CHOICE_STRUCT::~VIABLE_CHOICE_STRUCT() {
   delete []Blob;
-  if (blob_choices) {
-    blob_choices->deep_clear();
-    delete blob_choices;
-  }
+  delete []segmentation_state;
 }
 
 void VIABLE_CHOICE_STRUCT::Init(
@@ -140,24 +137,10 @@ void VIABLE_CHOICE_STRUCT::Init(
       blob_choice->NumChunks += blob_width;
       this->ComposedFromCharFragments = true;
     }
+    this->segmentation_state[i] = blob_choice->NumChunks;
   }
 }
 
-void VIABLE_CHOICE_STRUCT::SetBlobChoices(
-    const BLOB_CHOICE_LIST_VECTOR &src_choices) {
-  if (blob_choices != NULL) {
-    blob_choices->deep_clear();
-  } else {
-    blob_choices = new BLOB_CHOICE_LIST_CLIST();
-  }
-  BLOB_CHOICE_LIST_C_IT list_it(blob_choices);
-
-  for (int i = 0; i < src_choices.size(); ++i) {
-    BLOB_CHOICE_LIST *cc_list = new BLOB_CHOICE_LIST();
-    cc_list->deep_copy(src_choices[i], &BLOB_CHOICE::deep_copy);
-    list_it.add_after_then_move(cc_list);
-  }
-}
 
 namespace tesseract {
 
@@ -484,8 +467,7 @@ void Dict::LogNewSplit(int Blob) {
 void Dict::LogNewChoice(FLOAT32 AdjustFactor,
                         const float Certainties[],
                         bool raw_choice,
-                        WERD_CHOICE *WordChoice,
-                        const BLOB_CHOICE_LIST_VECTOR &blob_choices) {
+                        WERD_CHOICE *WordChoice) {
   LIST ChoicesList;
   LIST Choices;
   FLOAT32 Threshold;
@@ -555,9 +537,6 @@ void Dict::LogNewChoice(FLOAT32 AdjustFactor,
   } else {
     NewChoice = NewViableChoice(*WordChoice, AdjustFactor, Certainties);
   }
-
-  // Now we know we're gonna save it, so add the expensive copy.
-  NewChoice->SetBlobChoices(blob_choices);
 
   ChoicesList = s_adjoin (ChoicesList, NewChoice, CmpChoiceRatings);
   if (stopper_debug_level >= 2)
@@ -749,17 +728,15 @@ bool Dict::NoDangerousAmbig(WERD_CHOICE *best_choice,
         // fragments is added to other functions.
         int orig_i = 0;
         for (i = 0; i < alt_word->length(); ++i) {
-          bool replacement_is_ngram =
-              getUnicharset().get_isngram(alt_word->unichar_id(i));
-          int end_i = orig_i + alt_word->fragment_length(i) - 1;
-          if (alt_word->fragment_length(i) > 1 ||
-              (orig_i == end_i && replacement_is_ngram)) {
-            fixpt->push_back(DANGERR_INFO(orig_i, end_i, true,
-                                          replacement_is_ngram));
-             if (stopper_debug_level > 1) {
-               tprintf("fixpt->dangerous+=(%d %d %d %d)\n", orig_i, end_i,
-                       true, replacement_is_ngram);
-             }
+          if (alt_word->fragment_length(i) > 1) {
+            fixpt->push_back(DANGERR_INFO(
+                orig_i, orig_i+alt_word->fragment_length(i)-1, true,
+                getUnicharset().get_isngram(alt_word->unichar_id(i))));
+            if (stopper_debug_level > 1) {
+              tprintf("fixpt->dangerous+=(%d %d %d %d)\n", orig_i,
+                      (orig_i+alt_word->fragment_length(i)-1), true,
+                      getUnicharset().get_isngram(alt_word->unichar_id(i)));
+            }
           }
           orig_i += alt_word->fragment_length(i);
         }

@@ -1,15 +1,11 @@
-AM_CPPFLAGS += \
+SUBDIRS =
+AM_CPPFLAGS = \
     -DUSE_STD_NAMESPACE \
     -I$(top_srcdir)/cutil -I$(top_srcdir)/ccutil \
     -I$(top_srcdir)/ccstruct -I$(top_srcdir)/dict \
     -I$(top_srcdir)/image -I$(top_srcdir)/viewer
 
-if VISIBILITY
-AM_CPPFLAGS += -DTESS_EXPORTS \
-    -fvisibility=hidden -fvisibility-inlines-hidden
-endif
-
-noinst_HEADERS = \
+include_HEADERS = \
     input_file_buffer.h neural_net.h neuron.h
 
 if !USING_MULTIPLELIBS

@@ -800,8 +800,7 @@ void Dict::adjust_word(WERD_CHOICE *word,
   new_rating -= kRatingPad;
   word->set_rating(new_rating);
   if (debug) tprintf(" %4.2f --> %4.2f\n", adjust_factor, new_rating);
-  LogNewChoice(adjust_factor, certainty_array, false, word,
-               *char_choices);
+  LogNewChoice(adjust_factor, certainty_array, false, word);
 }
 
 int Dict::valid_word(const WERD_CHOICE &word, bool numbers_ok) const {

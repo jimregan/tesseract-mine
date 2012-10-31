@@ -21,13 +21,13 @@
 #include "ambigs.h"
 #include "helpers.h"
 
-#ifdef _WIN32
+#ifdef WIN32
 #ifndef __GNUC__
 #define strtok_r strtok_s
 #else
 #include "strtok_r.h"
 #endif  /* __GNUC__ */
-#endif  /* _WIN32 */
+#endif  /* WIN32 */
 
 namespace tesseract {
 

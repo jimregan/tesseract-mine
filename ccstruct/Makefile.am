@@ -1,20 +1,16 @@
-AM_CPPFLAGS += \
+SUBDIRS =
+AM_CPPFLAGS = \
     -I$(top_srcdir)/ccutil -I$(top_srcdir)/cutil \
     -I$(top_srcdir)/image -I$(top_srcdir)/viewer
-    
-if VISIBILITY
-AM_CPPFLAGS += -DTESS_EXPORTS \
-    -fvisibility=hidden -fvisibility-inlines-hidden
-endif
 
-include_HEADERS = publictypes.h
-noinst_HEADERS = \
+include_HEADERS = \
     blckerr.h blobbox.h blobs.h blread.h boxread.h boxword.h ccstruct.h coutln.h crakedge.h \
     detlinefit.h dppoint.h fontinfo.h genblob.h hpddef.h hpdsizes.h ipoints.h \
     linlsq.h matrix.h mod128.h normalis.h \
     ocrblock.h ocrpara.h ocrrow.h otsuthr.h \
     pageres.h params_training_featdef.h \
     pdblock.h points.h polyaprx.h polyblk.h \
+    publictypes.h \
     quadlsq.h quadratc.h quspline.h ratngs.h rect.h rejctmap.h \
     seam.h split.h statistc.h stepblob.h vecfuncs.h werd.h
 
@@ -24,10 +20,10 @@ else
 lib_LTLIBRARIES = libtesseract_ccstruct.la
 libtesseract_ccstruct_la_LDFLAGS = -version-info $(GENERIC_LIBRARY_VERSION)
 libtesseract_ccstruct_la_LIBADD = \
-    ../ccutil/libtesseract_ccutil.la \
-    ../cutil/libtesseract_cutil.la \
-    ../image/libtesseract_image.la \
-    ../viewer/libtesseract_viewer.la
+	../ccutil/libtesseract_ccutil.la \
+	../cutil/libtesseract_cutil.la \
+	../image/libtesseract_image.la \
+	../viewer/libtesseract_viewer.la
 endif
 
 libtesseract_ccstruct_la_SOURCES = \

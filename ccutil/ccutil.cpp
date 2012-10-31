@@ -8,8 +8,8 @@ CCUtil::CCUtil() :
   params_(),
   STRING_INIT_MEMBER(m_data_sub_dir,
                      "tessdata/", "Directory for data files", &params_),
-#ifdef _WIN32
-  STRING_INIT_MEMBER(tessedit_module_name, WINDLLNAME,
+#ifdef __MSW32__
+  STRING_INIT_MEMBER(tessedit_module_name, "tessdll.dll",
                      "Module colocated with tessdata dir", &params_),
 #endif
   INT_INIT_MEMBER(ambigs_debug_level, 0, "Debug level for unichar ambiguities",
@@ -25,7 +25,7 @@ CCUtil::~CCUtil() {
 
 
 CCUtilMutex::CCUtilMutex() {
-#ifdef _WIN32
+#ifdef WIN32
   mutex_ = CreateMutex(0, FALSE, 0);
 #else
   pthread_mutex_init(&mutex_, NULL);
@@ -33,7 +33,7 @@ CCUtilMutex::CCUtilMutex() {
 }
 
 void CCUtilMutex::Lock() {
-#ifdef _WIN32
+#ifdef WIN32
   WaitForSingleObject(mutex_, INFINITE);
 #else
   pthread_mutex_lock(&mutex_);
@@ -41,7 +41,7 @@ void CCUtilMutex::Lock() {
 }
 
 void CCUtilMutex::Unlock() {
-#ifdef _WIN32
+#ifdef WIN32
   ReleaseMutex(mutex_);
 #else
   pthread_mutex_unlock(&mutex_);

@@ -29,17 +29,20 @@
 namespace tesseract {
 
 // Writes to the given file. Returns false in case of error.
-bool UnicharAndFonts::Serialize(FILE* fp) const {
-  if (fwrite(&unichar_id, sizeof(unichar_id), 1, fp) != 1) return false;
+bool UnicharAndFonts::Serialize(FILE* fp) {
+  inT32 uni_id = unichar_id;
+  if (fwrite(&uni_id, sizeof(uni_id), 1, fp) != 1) return false;
   if (!font_ids.Serialize(fp)) return false;
   return true;
 }
 // Reads from the given file. Returns false in case of error.
 // If swap is true, assumes a big/little-endian swap is needed.
 bool UnicharAndFonts::DeSerialize(bool swap, FILE* fp) {
-  if (fread(&unichar_id, sizeof(unichar_id), 1, fp) != 1) return false;
+  inT32 uni_id;
+  if (fread(&uni_id, sizeof(uni_id), 1, fp) != 1) return false;
   if (swap)
-    ReverseN(&unichar_id, sizeof(unichar_id));
+    ReverseN(&uni_id, sizeof(uni_id));
+  unichar_id = uni_id;
   if (!font_ids.DeSerialize(swap, fp)) return false;
   return true;
 }
@@ -52,9 +55,8 @@ int UnicharAndFonts::SortByUnicharId(const void* v1, const void* v2) {
 }
 
 // Writes to the given file. Returns false in case of error.
-bool Shape::Serialize(FILE* fp) const {
-  uinT8 sorted = unichars_sorted_;
-  if (fwrite(&sorted, sizeof(sorted), 1, fp) != 1)
+bool Shape::Serialize(FILE* fp) {
+  if (fwrite(&unichars_sorted_, sizeof(unichars_sorted_), 1, fp) != 1)
     return false;
   if (!unichars_.SerializeClasses(fp)) return false;
   return true;
@@ -62,10 +64,8 @@ bool Shape::Serialize(FILE* fp) const {
 // Reads from the given file. Returns false in case of error.
 // If swap is true, assumes a big/little-endian swap is needed.
 bool Shape::DeSerialize(bool swap, FILE* fp) {
-  uinT8 sorted;
-  if (fread(&sorted, sizeof(sorted), 1, fp) != 1)
+  if (fread(&unichars_sorted_, sizeof(unichars_sorted_), 1, fp) != 1)
     return false;
-  unichars_sorted_ = sorted != 0;
   if (!unichars_.DeSerializeClasses(swap, fp)) return false;
   return true;
 }
@@ -197,26 +197,14 @@ STRING ShapeTable::DebugStr(int shape_id) const {
   const Shape& shape = GetShape(shape_id);
   STRING result;
   result.add_str_int("Shape", shape_id);
-  if (shape.size() > 100) {
-    result.add_str_int(" Num unichars=", shape.size());
-    return result;
-  }
   for (int c = 0; c < shape.size(); ++c) {
     result.add_str_int(" c_id=", shape[c].unichar_id);
     result += "=";
     result += unicharset_->id_to_unichar(shape[c].unichar_id);
-    if (shape.size() < 10) {
-      result.add_str_int(", ", shape[c].font_ids.size());
-      result += " fonts =";
-      int num_fonts = shape[c].font_ids.size();
-      if (num_fonts > 10) {
-        result.add_str_int(" ", shape[c].font_ids[0]);
-        result.add_str_int(" ... ", shape[c].font_ids[num_fonts - 1]);
-      } else {
-        for (int f = 0; f < num_fonts; ++f) {
-          result.add_str_int(" ", shape[c].font_ids[f]);
-        }
-      }
+    result.add_str_int(", ", shape[c].font_ids.size());
+    result += " fonts =";
+    for (int f = 0; f < shape[c].font_ids.size(); ++f) {
+      result.add_str_int(" ", shape[c].font_ids[f]);
     }
   }
   return result;
@@ -339,12 +327,12 @@ int ShapeTable::BuildFromShape(const Shape& shape,
 }
 
 // Returns true if the shapes are already merged.
-bool ShapeTable::AlreadyMerged(int shape_id1, int shape_id2) const {
+bool ShapeTable::AlreadyMerged(int shape_id1, int shape_id2) {
   return MasterDestinationIndex(shape_id1) == MasterDestinationIndex(shape_id2);
 }
 
 // Returns true if any shape contains multiple unichars.
-bool ShapeTable::AnyMultipleUnichars() const {
+bool ShapeTable::AnyMultipleUnichars() {
   int num_shapes = NumShapes();
   for (int s1 = 0; s1 < num_shapes; ++s1) {
     if (MasterDestinationIndex(s1) != s1) continue;
@@ -420,6 +408,10 @@ void ShapeTable::MergeShapes(int shape_id1, int shape_id2) {
   shape_table_[master_id2]->set_destination_index(master_id1);
   // Add all the shapes of master_id2 to master_id1.
   shape_table_[master_id1]->AddShape(*shape_table_[master_id2]);
+  tprintf("Merged shape %d->%d, %d->%d, now with %d unichars: %s\n",
+          shape_id1, master_id1, shape_id2, master_id2,
+          shape_table_[master_id1]->size(),
+          DebugStr(master_id1).string());
 }
 
 // Returns the destination of this shape, (if merged), taking into account

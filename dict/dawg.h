@@ -37,9 +37,9 @@
 #include "tesscallback.h"
 
 #ifndef __GNUC__
-#ifdef _WIN32
+#ifdef __MSW32__
 #define NO_EDGE                (inT64) 0xffffffffffffffffi64
-#endif  /*_WIN32*/
+#endif  /*__MSW32__*/
 #else
 #define NO_EDGE                (inT64) 0xffffffffffffffffll
 #endif /*__GNUC__*/

@@ -19,8 +19,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifdef EMBEDDED
-
 #include <ctype.h>
 #include <stdarg.h>
 #include <stddef.h>
@@ -546,5 +544,3 @@ int creat(const char *pathname, mode_t mode)
 {
   return open(pathname, O_CREAT | O_TRUNC | O_WRONLY, mode);
 }
-
-#endif  // EMBEDDED

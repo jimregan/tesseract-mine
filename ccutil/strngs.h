@@ -20,10 +20,10 @@
 #ifndef           STRNGS_H
 #define           STRNGS_H
 
-#include          <stdio.h>
 #include          <string.h>
-#include          "platform.h"
 #include          "memry.h"
+#include          "serialis.h"
+#include          "genericvector.h"
 
 // STRING_IS_PROTECTED means that  string[index] = X is invalid
 // because you have to go through strings interface to modify it.
@@ -35,9 +35,16 @@
 // cannot assume we know the strlen.
 #define STRING_IS_PROTECTED  0
 
-template <typename T> class GenericVector;
+#ifdef CCUTIL_EXPORTS
+#define CCUTIL_API __declspec(dllexport)
+#elif defined(CCUTIL_IMPORTS)
+#define CCUTIL_API __declspec(dllimport)
+#else
+#define CCUTIL_API
+#endif
 
-class TESS_API STRING
+
+class DLLSYM STRING
 {
   public:
     STRING();
@@ -55,11 +62,6 @@ class TESS_API STRING
     inT32 length() const;
     inT32 size() const { return length(); }
     const char *string() const;
-
-    inline char* strdup() const {
-     inT32 len = length() + 1;
-     return strncpy(new char[len], GetCStr(), len);
-    }
 
 #if STRING_IS_PROTECTED
     const char &operator[] (inT32 index) const;
@@ -85,9 +87,6 @@ class TESS_API STRING
     STRING & operator+= (const char *string);
     STRING & operator+= (const STRING & string);
     STRING & operator+= (const char ch);
-
-    // Assignment for strings which are not null-terminated.
-    void assign(const char *cstr, int len);
 
     // Appends the given string and int (as a %d) to this.
     // += cannot be used for ints as there as a char += operator that would

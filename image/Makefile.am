@@ -1,11 +1,7 @@
-AM_CPPFLAGS += -I$(top_srcdir)/ccutil -I$(top_srcdir)/viewer
-    
-if VISIBILITY
-AM_CPPFLAGS += -DTESS_EXPORTS \
-    -fvisibility=hidden -fvisibility-inlines-hidden
-endif
+SUBDIRS =
+AM_CPPFLAGS = -I$(top_srcdir)/ccutil -I$(top_srcdir)/viewer
 
-noinst_HEADERS = \
+include_HEADERS = \
     image.h img.h imgerrs.h imgs.h \
     imgtiff.h imgunpk.h svshowim.h
 
@@ -15,8 +11,8 @@ else
 lib_LTLIBRARIES = libtesseract_image.la
 libtesseract_image_la_LDFLAGS = -version-info $(GENERIC_LIBRARY_VERSION)
 libtesseract_image_la_LIBADD = \
-    ../ccutil/libtesseract_ccutil.la \
-    ../viewer/libtesseract_viewer.la
+	../ccutil/libtesseract_ccutil.la \
+	../viewer/libtesseract_viewer.la
 endif
 
 libtesseract_image_la_SOURCES = \

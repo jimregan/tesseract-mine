@@ -20,12 +20,14 @@
 #ifndef           BASEDIR_H
 #define           BASEDIR_H
 
-#include          "platform.h"
+#include          "host.h"
 #include          "strngs.h"
 
-// Returns the given code_path truncated to the last slash.
-// Useful for getting to the directory of argv[0], but does not search
-// any paths.
-TESS_API void truncate_path(const char *code_path, STRING* trunc_path);
+#include          "notdll.h"     //must be last include
 
+DLLSYM inT8 getpath(                   //get dir name of code
+                    const char *code,  //executable to locate
+                    const STRING &dll_module_name,
+                    STRING &path       //output path name
+                   );
 #endif

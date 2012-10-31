@@ -6,7 +6,7 @@
 #   aclocal
 #   autoheader
 #   autoconf
-#   automake
+#   autromake
 #
 # The whole thing is quite complex...
 #
@@ -27,17 +27,12 @@
 #
 # All the rest is auto-generated.
 
-# create m4 directory if it not exists
-if [ ! -d m4 ];  then
-    mkdir m4
-fi
-
 bail_out()
 {
-    echo
-    echo "  Something went wrong, bailing out!" 
-    echo
-    exit 1
+	echo 
+	echo "  Something went wrong, bailing out!" 
+	echo 
+	exit 1
 }
 
 # --- Step 1: Generate aclocal.m4 from:
@@ -49,7 +44,7 @@ mkdir -p config
 echo "Running aclocal"
 aclocal -I config || bail_out
 
-# --- Step 2:
+# --- Step 2: 
 
 echo "Running libtoolize"
 libtoolize -f -c || glibtoolize -f -c || bail_out
@@ -85,5 +80,5 @@ echo ""
 echo "All done."
 echo "To build the software now, do something like:"
 echo ""
-echo "$ ./configure [--enable-debug] [...other options]"
+echo "$ ./configure [--with-debug] [...other options]"
 echo "$ make"

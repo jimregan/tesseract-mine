@@ -20,7 +20,11 @@
 #ifndef           TESSERACTMAIN_H
 #define           TESSERACTMAIN_H
 
-#ifdef _WIN32
+#include          "params.h"
+#include          "blobs.h"
+#include          "notdll.h"
+
+#ifdef __MSW32__
 /**
  * main for windows command line
  */

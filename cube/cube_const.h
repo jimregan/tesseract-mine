@@ -32,7 +32,7 @@
 #define HIST_WND_RATIO    0.1f
 #define SEG_PT_WND_RATIO  0.1f
 
-#ifdef _WIN32
+#ifdef __MSW32__
 #ifdef __GNUC__
 #include <climits>
 #endif

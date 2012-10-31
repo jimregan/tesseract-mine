@@ -138,7 +138,7 @@ inT16 POLY_BLOCK::winding_number(const ICOORD &point) {
 }
 
 
-/// @return true if other is inside this.
+/// @Returns true if other is inside this.
 bool POLY_BLOCK::contains(POLY_BLOCK *other) {
   inT16 count;                   // winding count
   ICOORDELT_IT it = &vertices;   // iterator
@@ -301,7 +301,7 @@ void POLY_BLOCK::fill(ScrollView* window, ScrollView::Color colour) {
 #endif
 
 
-/// @return true if the polygons of other and this overlap.
+/// @Returns true if the polygons of other and this overlap.
 bool POLY_BLOCK::overlap(POLY_BLOCK *other) {
   inT16 count;                   // winding count
   ICOORDELT_IT it = &vertices;   // iterator
@@ -393,7 +393,7 @@ int lessthan(const void *first, const void *second) {
     return (0);
 }
 
-#ifndef GRAPHICS_DISABLED
+
 /// Returns a color to draw the given type.
 ScrollView::Color POLY_BLOCK::ColorForPolyBlockType(PolyBlockType type) {
   // Keep kPBColors in sync with PolyBlockType.
@@ -419,4 +419,3 @@ ScrollView::Color POLY_BLOCK::ColorForPolyBlockType(PolyBlockType type) {
   }
   return ScrollView::WHITE;
 }
-#endif  // GRAPHICS_DISABLED

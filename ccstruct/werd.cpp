@@ -291,6 +291,10 @@ void WERD::plot(ScrollView *window, ScrollView::Color colour) {
   }
   plot_rej_blobs(window);
 }
+#endif
+
+
+#ifndef GRAPHICS_DISABLED
 
 // Get the next color in the (looping) rainbow.
 ScrollView::Color WERD::NextColor(ScrollView::Color colour) {
@@ -315,6 +319,7 @@ void WERD::plot(ScrollView* window) {
   }
   plot_rej_blobs(window);
 }
+#endif
 
 
 /**
@@ -323,14 +328,14 @@ void WERD::plot(ScrollView* window) {
  * Draw the WERD rejected blobs in window - ALWAYS GREY
  */
 
-
+#ifndef GRAPHICS_DISABLED
 void WERD::plot_rej_blobs(ScrollView *window) {
   C_BLOB_IT it = &rej_cblobs;
   for (it.mark_cycle_pt(); !it.cycled_list(); it.forward()) {
     it.data()->plot(window, ScrollView::GREY, ScrollView::GREY);
   }
 }
-#endif  // GRAPHICS_DISABLED
+#endif
 
 
 /**
@@ -466,7 +471,7 @@ WERD* WERD::ConstructWerdWithNewBlobs(C_BLOB_LIST* all_blobs,
       TBOX a_blob_box = a_blob->bounding_box();
       if ((not_found_box.major_overlap(a_blob_box) ||
            a_blob_box.major_overlap(not_found_box)) &&
-           not_found_box.y_overlap(a_blob_box)) {
+           not_found_box.y_overlap(a_blob_box) > 0.8) {
         // Already taken care of.
         delete not_found_it.extract();
         break;

@@ -459,7 +459,6 @@ bool TabFind::FindTabVectors(TabVector_LIST* hlines,
     return false;  // Skew angle is too large.
   part_grid->Deskew(*deskew);
   ApplyTabConstraints();
-  #ifndef GRAPHICS_DISABLED
   if (textord_tabfind_show_finaltabs) {
     tab_win = MakeWindow(640, 50, "FinalTabs");
     if (textord_debug_images) {
@@ -471,7 +470,6 @@ bool TabFind::FindTabVectors(TabVector_LIST* hlines,
     }
     tab_win = DisplayTabVectors(tab_win);
   }
-  #endif  // GRAPHICS_DISABLED
   return true;
 }
 
@@ -504,12 +502,10 @@ void TabFind::TidyBlobs(TO_BLOCK* block) {
   if (textord_debug_tabfind) {
     tprintf("Moved %d large blobs to normal list\n",
             b_count);
-    #ifndef GRAPHICS_DISABLED
     ScrollView* rej_win = MakeWindow(500, 300, "Image blobs");
     block->plot_graded_blobs(rej_win);
     block->plot_noise_blobs(rej_win);
     rej_win->Update();
-    #endif  // GRAPHICS_DISABLED
   }
   block->DeleteUnownedNoise();
 }
@@ -565,7 +561,6 @@ ScrollView* TabFind::FindInitialTabVectors(BLOBNBOX_LIST* image_blobs,
 // Helper displays all the boxes in the given vector on the given window.
 static void DisplayBoxVector(const GenericVector<BLOBNBOX*> boxes,
                              ScrollView* win) {
-  #ifndef GRAPHICS_DISABLED
   for (int i = 0; i < boxes.size(); ++i) {
     TBOX box = boxes[i]->bounding_box();
     int left_x = box.left();
@@ -577,7 +572,6 @@ static void DisplayBoxVector(const GenericVector<BLOBNBOX*> boxes,
     win->Rectangle(left_x, bottom_y, right_x, top_y);
   }
   win->Update();
-  #endif  // GRAPHICS_DISABLED
 }
 
 // For each box in the grid, decide whether it is a candidate tab-stop,
@@ -603,7 +597,6 @@ ScrollView* TabFind::FindTabBoxes(int min_gutter_width) {
   left_tab_boxes_.sort(SortByBoxLeft<BLOBNBOX>);
   right_tab_boxes_.sort(SortRightToLeft<BLOBNBOX>);
   ScrollView* tab_win = NULL;
-  #ifndef GRAPHICS_DISABLED
   if (textord_tabfind_show_initialtabs) {
     tab_win = MakeWindow(0, 100, "InitialTabs");
     tab_win->Pen(ScrollView::BLUE);
@@ -613,7 +606,6 @@ ScrollView* TabFind::FindTabBoxes(int min_gutter_width) {
     DisplayBoxVector(right_tab_boxes_, tab_win);
     tab_win = DisplayTabs("Tabs", tab_win);
   }
-  #endif  // GRAPHICS_DISABLED
   return tab_win;
 }
 
@@ -973,19 +965,15 @@ void TabFind::EvaluateTabs() {
 // can be tested for being a common width with a simple callback function.
 void TabFind::ComputeColumnWidths(ScrollView* tab_win,
                                   ColPartitionGrid* part_grid) {
-  #ifndef GRAPHICS_DISABLED
   if (tab_win != NULL)
     tab_win->Pen(ScrollView::WHITE);
-  #endif  // GRAPHICS_DISABLED
   // Accumulate column sections into a STATS
   int col_widths_size = (tright_.x() - bleft_.x()) / kColumnWidthFactor;
   STATS col_widths(0, col_widths_size + 1);
   ApplyPartitionsToColumnWidths(part_grid, &col_widths);
-  #ifndef GRAPHICS_DISABLED
   if (tab_win != NULL) {
     tab_win->Update();
   }
-  #endif  // GRAPHICS_DISABLED
   if (textord_debug_tabfind > 1)
     col_widths.print();
   // Now make a list of column widths.

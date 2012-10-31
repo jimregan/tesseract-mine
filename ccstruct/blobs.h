@@ -154,10 +154,8 @@ struct TESSLINE {
            botright.y <= pt.y && pt.y <= topleft.y;
   }
 
-  #ifndef GRAPHICS_DISABLED
   void plot(ScrollView* window, ScrollView::Color color,
             ScrollView::Color child_color);
-  #endif  // GRAPHICS_DISABLED
 
   int BBArea() const {
     return (botright.x - topleft.x) * (topleft.y - botright.y);
@@ -212,10 +210,8 @@ struct TBLOB {
 
   TBOX bounding_box() const;
 
-  #ifndef GRAPHICS_DISABLED
   void plot(ScrollView* window, ScrollView::Color color,
             ScrollView::Color child_color);
-  #endif  // GRAPHICS_DISABLED
 
   int BBArea() const {
     int total_area = 0;

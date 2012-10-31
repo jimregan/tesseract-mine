@@ -38,8 +38,8 @@
 DLLSYM STRING_VAR(debug_file, "", "File to send tprintf output to");
 
 DLLSYM void
-tprintf(                         // Trace printf
-const char *format, ...          // special message
+tprintf (                        //Trace printf
+const char *format, ...          //special message
 ) {
   tesseract::tprintfMutex.Lock();
   va_list args;                  //variable args
@@ -49,11 +49,9 @@ const char *format, ...          // special message
   static char msg[MAX_MSG_LEN + 1];
 
   va_start(args, format);  //variable list
-  #ifdef _WIN32
+  #ifdef __MSW32__
                                  //Format into msg
   offset += _vsnprintf (msg + offset, MAX_MSG_LEN - offset, format, args);
-  if (strcmp(debug_file.string(), "/dev/null") == 0)
-    debug_file.set_value("nul");
   #else
                                  //Format into msg
   offset += vsprintf (msg + offset, format, args);
@@ -105,7 +103,7 @@ pause_continue (const char *format, ...
   return (c != 'c');
   #endif
 
-  #ifdef _WIN32
+  #ifdef __MSW32__
   str +=
     STRING (msg) + STRING ("\nUse OK to continue, CANCEL to stop pausing");
   //   return AfxMessageBox( str.string(), MB_OKCANCEL ) == IDOK;

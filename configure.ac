@@ -7,18 +7,19 @@
 # ----------------------------------------
 
 AC_PREREQ(2.50)
-AC_INIT([tesseract], [3.02.02], [http://code.google.com/p/tesseract-ocr/issues/list])
+AC_INIT([tesseract], [3.02], [theraysmith@gmail.com])
 AC_CONFIG_MACRO_DIR([m4])
 AC_REVISION($Id: configure.ac,v 1.4 2007/02/02 22:38:17 theraysmith Exp $)
 AC_CONFIG_AUX_DIR(config)
 AC_CONFIG_SRCDIR(api/tesseractmain.cpp)
 AC_PREFIX_DEFAULT(/usr/local)
+AC_CANONICAL_HOST
 
 # Define date of package, etc. Could be useful in auto-generated
 # documentation.
 # TODO(luc) Generate good documentation using doxygen or equivalent
 PACKAGE_YEAR=2012
-PACKAGE_DATE="10/23"
+PACKAGE_DATE="02/01"
 
 AC_DEFINE_UNQUOTED(PACKAGE_NAME,["${PACKAGE_NAME}"],[Name of package])
 AC_DEFINE_UNQUOTED(PACKAGE_VERSION,["${PACKAGE_VERSION}"],[Version number])
@@ -35,7 +36,7 @@ GENERIC_LIBRARY_NAME=tesseract
 # Release versioning
 GENERIC_MAJOR_VERSION=3
 GENERIC_MINOR_VERSION=2
-GENERIC_MICRO_VERSION=2
+GENERIC_MICRO_VERSION=0
 
 # API version (often = GENERIC_MAJOR_VERSION.GENERIC_MINOR_VERSION)
 GENERIC_API_VERSION=$GENERIC_MAJOR_VERSION.$GENERIC_MINOR_VERSION
@@ -51,27 +52,6 @@ GENERIC_VERSION=$GENERIC_MAJOR_VERSION.$GENERIC_MINOR_VERSION.$GENERIC_MICRO_VER
 GENERIC_RELEASE=$GENERIC_MAJOR_VERSION.$GENERIC_MINOR_VERSION
 AC_SUBST(GENERIC_RELEASE)
 AC_SUBST(GENERIC_VERSION)
-
-# default conditional
-AM_CONDITIONAL(MINGW, false)
-AM_CONDITIONAL(GRAPHICS_DISABLED, false)
-
-#
-# Platform specific setup
-#
-#############################
-AC_CANONICAL_HOST
-case $host_os in
-    mingw32*)
-        AC_DEFINE_UNQUOTED(MINGW,1,[This is a MinGW system])
-        AM_CONDITIONAL(MINGW, true)
-        AC_SUBST([AM_CPPFLAGS], ["-D__BLOB_T_DEFINED"])
-        AC_SUBST([AM_LDFLAGS], ['-Wl,-no-undefined -Wl,--as-needed'])
-        ;;
-     *)
-        # default
-        ;;
-esac
 
 includedir="${includedir}/tesseract"
 
@@ -95,72 +75,23 @@ AC_ARG_WITH(extra-libraries,
 
 AC_MSG_CHECKING(--enable-graphics argument)
 AC_ARG_ENABLE([graphics],
- [AC_HELP_STRING([--enable-graphics],[enable graphics (ScrollView) (default)])
-AC_HELP_STRING([--disable-graphics],[disable graphics (ScrollView)])],
+    [  --enable-graphics         Enable graphics (ScrollView) (default).],
     [enable_graphics=$enableval],
     [enable_graphics="yes"])
 AC_MSG_RESULT($enable_graphics)
 if test "$enable_graphics" = "no"; then
-  AC_DEFINE([GRAPHICS_DISABLED], [], [Disable graphics])
-  AM_CONDITIONAL(GRAPHICS_DISABLED, true)
+  AC_DEFINE([DISABLE_GRAPHICS], [], [Disable graphics])
 fi
-
-# check whether to build embedded version
-AC_MSG_CHECKING(--enable-embedded argument)
-AC_ARG_ENABLE([embedded],
-    [  --enable-embedded       enable embedded build (default=no)],
-    [enable_embedded=$enableval],
-    [enable_embedded="no"])
-AC_MSG_RESULT($enable_embedded)
-AM_CONDITIONAL([EMBEDDED], [test "$enable_embedded" = "yes"])
-if test "$enable_embedded" = "yes"; then
-  AC_SUBST([AM_CPPFLAGS], [-DEMBEDDED])
-fi
-
-# check whether to build tesseract with -fvisibility=hidden -fvisibility-inlines-hidden
-# http://gcc.gnu.org/wiki/Visibility
-# http://groups.google.com/group/tesseract-dev/browse_thread/thread/976645ae98189127
-AC_MSG_CHECKING(--enable-visibility argument)
-AC_ARG_ENABLE([visibility],
-    [AC_HELP_STRING([--enable-visibility],[enable experimental build with fvisibility (default=no)])],
-    [enable_visibility=$enableval],
-    [enable_visibility="no"])
-AC_MSG_RESULT($enable_visibility)
-AM_CONDITIONAL([VISIBILITY], [test "$enable_visibility" = "yes"])
 
 # check whether to build multiple libraries
 AC_MSG_CHECKING(--enable-multiple-libraries argument)
 AC_ARG_ENABLE([multiple-libraries],
-    [AC_HELP_STRING([--enable-multiple-libraries],[enable multiple libraries (default=no)])],
+    [  --enable-multiple-libraries         Enable multiple libraries.],
     [enable_mlibs=$enableval],
     [enable_mlibs="no"])
 AC_MSG_RESULT($enable_mlibs)
 AM_CONDITIONAL([USING_MULTIPLELIBS], [test "$enable_mlibs" = "yes"])
 
-# Check if tessdata-prefix is disabled
-AC_MSG_CHECKING(whether to use tessdata-prefix)
-AC_ARG_ENABLE(tessdata-prefix,
-    [AC_HELP_STRING([--disable-tessdata-prefix],
-            [dont set TESSDATA-PREFIX during compile])],
-    [tessdata_prefix="no"], [tessdata_prefix="yes"])
-AC_MSG_RESULT($tessdata_prefix)
-AM_CONDITIONAL([NO_TESSDATA_PREFIX], [test "$tessdata_prefix" = "no"])
-
-# Check whether enable debuging
-AC_MSG_CHECKING(whether to enable debugging)
-AC_ARG_ENABLE([debug],
-    [AC_HELP_STRING([--enable-debug],
-        [turn on debugging (default=no)])],
-    [debug=$enableval],
-    [debug="no"])
-AC_MSG_RESULT($debug)
-if test x"$debug" = x"yes"; then
-    AM_CXXFLAGS="$AM_CXXFLAGS -g -Wall -Wno-uninitialized -O0 -DDEBUG"
-    AM_CPPFLAGS="$AM_CPPFLAGS -g -Wall -Wno-uninitialized -O0 -DDEBUG"
-else
-    AM_CXXFLAGS="$AM_CXXFLAGS -O3 -DNDEBUG"
-    AM_CPPFLAGS="$AM_CPPFLAGS -O3 -DNDEBUG"
-fi
 
 #localedir='${prefix}/share/locale'
 
@@ -227,7 +158,7 @@ AM_CONFIG_HEADER(config_auto.h:config/config.h.in)
 #AM_PROG_CC_C_O
 AM_MAINTAINER_MODE
 # Need to tell automake if Visual C++ is being used:
-AM_CONDITIONAL(USING_CL, test "x${CC}" = 'xcl.exe' )
+AM_CONDITIONAL(USING_CL, test x$CC = xcl.exe)
 
 # Additional checking of compiler characteristics
 # ----------------------------------------
@@ -344,8 +275,7 @@ AC_LANG_CPLUSPLUS
 # which causes unnecessary warnings with Visual C++.
 # Comment it out for now.
 #AC_CHECK_LIB(m,sqrt)
-AC_SEARCH_LIBS(sem_init,pthread rt)
-#AC_CHECK_LIB(pthread,sem_init)
+AC_CHECK_LIB(pthread,sem_init)
 
 # ----------------------------------------
 # Checks for header files.
@@ -429,7 +359,7 @@ fi
 # AC_DEFINE_UNQUOTED(TESSERACT_VERSION,["${PACKAGE_VERSION}"],[version string])
 
 # Output files
-AC_CONFIG_FILES([Makefile tesseract.pc])
+AC_CONFIG_FILES(Makefile)
 #if test "$enable_gettext" = "yes"; then
 #AC_CONFIG_FILES(po/Makefile.in)
 #fi
@@ -451,6 +381,7 @@ AC_CONFIG_FILES(tessdata/Makefile)
 AC_CONFIG_FILES(tessdata/configs/Makefile)
 AC_CONFIG_FILES(tessdata/tessconfigs/Makefile)
 AC_CONFIG_FILES(testing/Makefile)
+if test "$enable_graphics" = "yes"; then
 AC_CONFIG_FILES(java/Makefile)
 AC_CONFIG_FILES(java/com/Makefile)
 AC_CONFIG_FILES(java/com/google/Makefile)
@@ -458,6 +389,7 @@ AC_CONFIG_FILES(java/com/google/scrollview/Makefile)
 AC_CONFIG_FILES(java/com/google/scrollview/events/Makefile)
 AC_CONFIG_FILES(java/com/google/scrollview/ui/Makefile)
 AC_CONFIG_FILES(doc/Makefile)
+fi
 # AC_CONFIG_FILES(doc/Doxyfile)
 # AC_CONFIG_FILES(doc/header.html)
 # AC_CONFIG_FILES(doc/footer.html)
@@ -492,6 +424,10 @@ AH_BOTTOM([
 /* Miscellaneous defines */
 #define AUTOCONF 1
 
+#ifdef DISABLE_GRAPHICS
+#define GRAPHICS_DISABLED
+#endif
+
 /* Not used yet
 #ifndef NO_GETTEXT
 #define USING_GETTEXT
@@ -501,3 +437,4 @@ AH_BOTTOM([
 /* config_auto.h: end */
 #endif
 ])
+

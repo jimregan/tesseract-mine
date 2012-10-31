@@ -21,7 +21,6 @@
 #ifndef TESSERACT_CCMAIN_LTR_RESULT_ITERATOR_H__
 #define TESSERACT_CCMAIN_LTR_RESULT_ITERATOR_H__
 
-#include "platform.h"
 #include "pageiterator.h"
 #include "unicharset.h"
 
@@ -43,7 +42,7 @@ class Tesseract;
 // See also base class PageIterator, which contains the bulk of the interface.
 // LTRResultIterator adds text-specific methods for access to OCR output.
 
-class TESS_API LTRResultIterator : public PageIterator {
+class LTRResultIterator : public PageIterator {
   friend class ChoiceIterator;
  public:
   // page_res and tesseract come directly from the BaseAPI.

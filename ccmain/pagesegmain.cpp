@@ -17,7 +17,7 @@
  *
  **********************************************************************/
 
-#ifdef _WIN32
+#ifdef WIN32
 #ifndef __GNUC__
 #include <windows.h>
 #endif  /* __GNUC__ */

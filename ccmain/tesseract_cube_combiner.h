@@ -27,7 +27,7 @@
 #include <vector>
 #include "pageres.h"
 
-#ifdef _WIN32
+#ifdef __MSW32__
 #include <windows.h>
 using namespace std;
 #endif

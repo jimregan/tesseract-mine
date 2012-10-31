@@ -22,14 +22,6 @@
  ** limitations under the License.
  *
  *********************************************************************************/
-
-// Include automatically generated configuration file if running autoconf.
-#ifdef HAVE_CONFIG_H
-#include "config_auto.h"
-#endif
-
-#ifndef GRAPHICS_DISABLED
-
 /*----------------------------------------------------------------------
               I n c l u d e s
 ----------------------------------------------------------------------*/
@@ -39,6 +31,13 @@
 #include "blobs.h"
 #include "const.h"
 #include <math.h>
+
+// Include automatically generated configuration file if running autoconf.
+#ifdef HAVE_CONFIG_H
+#include "config_auto.h"
+#endif
+
+#ifndef GRAPHICS_DISABLED
 
 /*----------------------------------------------------------------------
               V a r i a b l e s

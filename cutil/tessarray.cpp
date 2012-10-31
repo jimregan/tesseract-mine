@@ -35,7 +35,7 @@ of these routines see the file "das.h".
 
 #include <stdio.h>
 #include <string.h>
-#ifdef _WIN32
+#ifdef __MSW32__
 #include <process.h>
 #endif
 #include <ctype.h>

@@ -167,7 +167,6 @@ namespace tesseract {
  * @note History: Mon Mar 11 10:00:58 1991, DSJ, Created.
  *
  * @param Blob    blob to be classified
- * @param denorm normalization/denormalization parameters
  * @param[out] Choices    List of choices found by adaptive matcher.
  * @param[out] CPResults  Array of CPResultStruct of size MAX_NUM_CLASSES is
  * filled on return with the choices found by the
@@ -181,10 +180,12 @@ void Classify::AdaptiveClassifier(TBLOB *Blob,
                                   CLASS_PRUNER_RESULTS CPResults) {
   assert(Choices != NULL);
   ADAPT_RESULTS *Results = new ADAPT_RESULTS();
-  Results->Initialize();
 
   if (AdaptedTemplates == NULL)
     AdaptedTemplates = NewAdaptedTemplates (true);
+
+  Results->Initialize();
+
   DoAdaptiveMatch(Blob, denorm, Results);
   if (CPResults != NULL)
     memcpy(CPResults, Results->CPResults,
@@ -227,7 +228,6 @@ void Classify::AdaptiveClassifier(TBLOB *Blob,
 // Clears the window and draws baselines.
 void Classify::RefreshDebugWindow(ScrollView **win, const char *msg,
                                   int y_offset, const TBOX &wbox) {
-  #ifndef GRAPHICS_DISABLED
   const int kSampleSpaceWidth = 500;
   if (*win == NULL) {
     *win = new ScrollView(msg, 100, y_offset, kSampleSpaceWidth * 2, 200,
@@ -241,7 +241,6 @@ void Classify::RefreshDebugWindow(ScrollView **win, const char *msg,
                kSampleSpaceWidth, kBlnXHeight + kBlnBaselineOffset);
   (*win)->ZoomToRectangle(wbox.left(), wbox.top(),
                           wbox.right(), wbox.bottom());
-  #endif  // GRAPHICS_DISABLED
 }
 
 // Learns the given word using its chopped_word, seam_array, denorm,
@@ -277,7 +276,6 @@ void Classify::LearnWord(const char* filename, const char *rejmap,
   int start_blob = 0;
   char prev_map_char = '0';
 
-  #ifndef GRAPHICS_DISABLED
   if (classify_debug_character_fragments) {
     if (learn_fragmented_word_debug_win_ != NULL) {
       window_wait(learn_fragmented_word_debug_win_);
@@ -289,7 +287,6 @@ void Classify::LearnWord(const char* filename, const char *rejmap,
     word->chopped_word->plot(learn_fragmented_word_debug_win_);
     ScrollView::Update();
   }
-  #endif  // GRAPHICS_DISABLED
 
   for (int ch = 0; ch < word_len; ++ch) {
     if (classify_debug_character_fragments) {
@@ -413,7 +410,6 @@ void Classify::LearnPieces(const char* filename, int start, int length,
   if (rotated_blob == NULL)
     rotated_blob = blob;
 
-  #ifndef GRAPHICS_DISABLED
   // Draw debug windows showing the blob that is being learned if needed.
   if (strcmp(classify_learn_debug_str.string(), correct_text) == 0) {
     RefreshDebugWindow(&learn_debug_win_, "LearnPieces", 600,
@@ -428,7 +424,6 @@ void Classify::LearnPieces(const char* filename, int start, int length,
                ScrollView::BLUE, ScrollView::BROWN);
     learn_fragments_debug_win_->Update();
   }
-  #endif  // GRAPHICS_DISABLED
 
   if (filename != NULL) {
     classify_norm_method.set_value(character);  // force char norm spc 30/11/93
@@ -741,7 +736,6 @@ void Classify::SettupPass2() {
  * config in that class.
  *
  * @param Blob blob to model new class after
- * @param denorm normalization/denormalization parameters
  * @param ClassId id of the class to be initialized
  * @param FontinfoId font information inferred from pre-trained templates
  * @param Class adapted class to be initialized
@@ -843,6 +837,7 @@ void Classify::InitAdaptedClass(TBLOB *Blob,
  *
  * Globals: none
  * @param Blob blob to extract features from
+ * @param LineStats statistics about text row blob is in
  * @param[out] IntFeatures array to fill with integer features
  * @param[out] FloatFeatures place to return actual floating-pt features
  *
@@ -901,14 +896,7 @@ int Classify::AdaptableWord(TWERD *Word,
       BestChoiceLength > 0 &&
       BestChoiceLength == Word->NumBlobs() &&
       BestChoiceLength <= MAX_ADAPTABLE_WERD_SIZE &&
-      // This basically ensures that the word is at least a dictionary match
-      // (freq word, user word, system dawg word, etc).
-      // Since all the other adjustments will make adjust factor higher
-      // than higher than adaptable_score=1.1+0.05=1.15
-      // Since these are other flags that ensure that the word is dict word,
-      // this check could be at times redundant.
       getDict().CurrentBestChoiceAdjustFactor() <= adaptable_score &&
-      // Make sure that alternative choices are not dictionary words.
       getDict().AlternativeChoicesWorseThan(adaptable_score) &&
       getDict().CurrentBestChoiceIs(BestChoiceWord);
 }
@@ -916,7 +904,7 @@ int Classify::AdaptableWord(TWERD *Word,
 /*---------------------------------------------------------------------------*/
 /**
  * @param Blob blob to add to templates for ClassId
- * @param denorm normalization/denormalization parameters
+ * @param LineStats statistics about text line blob is in
  * @param ClassId class to add blob to
  * @param FontinfoId font information from pre-trained templates
  * @param Threshold minimum match rating to existing template
@@ -1068,7 +1056,7 @@ void Classify::DisplayAdaptedChar(TBLOB* blob, const DENORM& denorm,
 /*---------------------------------------------------------------------------*/
 /**
  * @param Blob blob to add to templates for ClassId
- * @param denorm normalization/denormalization parameters
+ * @param LineStats statistics about text line blob is in
  * @param ClassId class to add blob to
  * @param FontinfoId font information from pre-trained teamples
  * @param Threshold minimum match rating to existing template
@@ -1129,10 +1117,9 @@ void Classify::AdaptToPunc(TBLOB *Blob,
  *
  * @param[out] results results to add new result to
  * @param class_id class of new result
- * @param shape_id shape index
  * @param rating rating of new result
- * @param adapted adapted match or not
  * @param config config id of new result
+ * @param config2 config id of 2nd choice result
  * @param fontinfo_id font information of the new result
  * @param fontinfo_id2 font information of the 2nd choice result
  *
@@ -1193,9 +1180,7 @@ void Classify::AddNewResult(ADAPT_RESULTS *results,
  * - #AllConfigsOn mask that enables all configs
  *
  * @param Blob blob to be classified
- * @param denorm normalization/denormalization parameters
  * @param Templates built-in templates to classify against
- * @param Classes adapted class templates
  * @param Ambiguities array of class id's to match against
  * @param[out] Results place to put match results
  *
@@ -1412,7 +1397,6 @@ double Classify::ComputeCorrectedRating(bool debug, int unichar_id,
  * - BaselineCutoffs expected num features for each class
  *
  * @param Blob blob to be classified
- * @param denorm normalization/denormalization parameters
  * @param Templates current set of adapted templates
  * @param Results place to put match results
  *
@@ -1472,7 +1456,6 @@ UNICHAR_ID *Classify::BaselineClassifier(TBLOB *Blob,
  * are added to Results.
  *
  * @param Blob blob to be classified
- * @param denorm normalization/denormalization parameters
  * @param Templates templates to classify unknown against
  * @param Results place to put match results
  *
@@ -1737,7 +1720,6 @@ void Classify::ConvertMatchesToChoices(const DENORM& denorm, const TBOX& box,
 /**
  *
  * @param Blob blob whose classification is being debugged
- * @param denorm normalization/denormalization parameters
  * @param Results results of match being debugged
  *
  * Globals: none
@@ -1794,7 +1776,6 @@ void Classify::DebugAdaptiveClassifier(TBLOB *Blob,
  * of these classifications are merged together into Results.
  *
  * @param Blob blob to be classified
- * @param denorm normalization/denormalization parameters
  * @param Results place to put match results
  *
  * Globals:
@@ -1852,7 +1833,6 @@ void Classify::DoAdaptiveMatch(TBLOB *Blob,
  * desired thresholds.
  *
  * @param Word current word
- * @param denorm normalization/denormalization parameters
  * @param BestChoice best choice for current word with context
  * @param BestRawChoice best choice for current word without context
  * @param[out] Thresholds array of thresholds to be filled in
@@ -1884,7 +1864,6 @@ void Classify::GetAdaptThresholds(TWERD * Word,
  * class which are potential ambiguities.
  *
  * @param Blob blob to get classification ambiguities for
- * @param denorm normalization/denormalization parameters
  * @param CorrectClass correct class for Blob
  *
  * Globals:
@@ -1938,7 +1917,6 @@ UNICHAR_ID *Classify::GetAmbiguities(TBLOB *Blob,
  * array provided by the caller.
  *
  * @param Blob blob to extract features from
- * @param denorm normalization/denormalization parameters
  * @param Templates used to compute char norm adjustments
  * @param IntFeatures array to fill with integer features
  * @param CharNormArray array to fill with dummy char norm adjustments
@@ -2023,14 +2001,10 @@ bool Classify::LooksLikeGarbage(const DENORM& denorm, TBLOB *blob) {
  * array provided by the caller.
  *
  * @param Blob blob to extract features from
- * @param denorm normalization/denormalization parameters
  * @param Templates used to compute char norm adjustments
  * @param IntFeatures array to fill with integer features
- * @param PrunerNormArray Array of factors from blob normalization
- *        process
  * @param CharNormArray array to fill with dummy char norm adjustments
  * @param BlobLength length of blob in baseline-normalized units
- * @param FeatureOutlineArray
  *
  * Globals:
  * - FeaturesHaveBeenExtracted TRUE if fx has been done
@@ -2312,7 +2286,6 @@ PROTO_ID Classify::MakeNewTempProtos(FEATURE_SET Features,
  * @param Templates current set of adaptive templates
  * @param ClassId class containing config to be made permanent
  * @param ConfigId config to be made permanent
- * @param denorm normalization/denormalization parameters
  * @param Blob current blob being adapted to
  *
  * Globals: none
@@ -2375,8 +2348,8 @@ void Classify::MakePermanent(ADAPT_TEMPLATES Templates,
  * its proto id is used by the configuration specified in
  * ProtoKey.
  *
- * @param item1 (TEMP_PROTO) temporary proto to compare to key
- * @param item2 (PROTO_KEY) defines which protos to make permanent
+ * @param TempProto temporary proto to compare to key
+ * @param ProtoKey defines which protos to make permanent
  *
  * Globals: none
  *
@@ -2492,12 +2465,18 @@ void Classify::RemoveBadMatches(ADAPT_RESULTS *Results) {
 
 /*----------------------------------------------------------------------------*/
 /**
- * This routine discards extra digits or punctuation from the results.
- * We keep only the top 2 punctuation answers and the top 1 digit answer if
- * present.
+ * This routine steps thru each matching class in Results
+ * and removes it from the match list if its rating
+ * is worse than the BestRating plus a pad.  In other words,
+ * all good matches get moved to the front of the classes
+ * array.
  *
- * @param Results contains matches to be filtered
+ * @parm Results contains matches to be filtered
  *
+ * Globals:
+ * - matcher_bad_match_pad defines a "bad match"
+ *
+ * @note Exceptions: none
  * @note History: Tue Mar 12 13:51:03 1991, DSJ, Created.
  */
 void Classify::RemoveExtraPuncs(ADAPT_RESULTS *Results) {
@@ -2560,12 +2539,9 @@ void Classify::SetAdaptiveThreshold(FLOAT32 Threshold) {
  * information for the config which matched best.
  *
  * @param Blob blob to show best matching config for
- * @param denorm normalization/denormalization parameters
  * @param ClassId class whose configs are to be searched
- * @param shape_id shape index
  * @param AdaptiveOn TRUE if adaptive configs are enabled
  * @param PreTrainedOn TRUE if pretrained configs are enabled
- * @param Results results of match being debugged
  *
  * Globals:
  * - PreTrainedTemplates built-in training

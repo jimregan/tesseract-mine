@@ -414,7 +414,7 @@ int SplitProto(CLASS_TYPE Class, int OldPid) {
 
 /**
  * @deprecated
- * @name WriteOldConfigFile
+ * @nameWriteOldConfigFile
  *
  * Write the configs in the given class to the specified file in the
  * old config format.

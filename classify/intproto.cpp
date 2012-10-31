@@ -168,7 +168,7 @@ void RenderIntProto(ScrollView *window,
                     INT_CLASS Class,
                     PROTO_ID ProtoId,
                     ScrollView::Color color);
-#endif  // GRAPHICS_DISABLED
+#endif
 
 int TruncateParam(FLOAT32 Param, int Min, int Max, char *Id);
 
@@ -390,7 +390,7 @@ void AddProtoToProtoPruner(PROTO Proto, int ProtoId,
   ProtoSet = Class->ProtoSets[SetForProto (ProtoId)];
 
   Angle = Proto->Angle;
-#ifndef _WIN32
+#ifndef __MSW32__
   assert(!isnan(Angle));
 #endif
 
@@ -1808,19 +1808,19 @@ void InitTableFiller (FLOAT32 EndPad, FLOAT32 SidePad,
 
 /*---------------------------------------------------------------------------*/
 #ifndef GRAPHICS_DISABLED
-/*
- * Parameters:
- *   ShapeList shape list to add feature rendering to
- *   Feature   feature to be rendered
- *   Color   color to use for feature rendering
- * Globals: none
- * Operation: This routine renders the specified feature into ShapeList.
- * Return: New shape list with rendering of Feature added.
- * @note Exceptions: none
- * @note History: Thu Mar 21 14:57:41 1991, DSJ, Created.
- */
 void RenderIntFeature(ScrollView *window, const INT_FEATURE_STRUCT* Feature,
                       ScrollView::Color color) {
+/*
+ ** Parameters:
+ **   ShapeList shape list to add feature rendering to
+ **   Feature   feature to be rendered
+ **   Color   color to use for feature rendering
+ ** Globals: none
+ ** Operation: This routine renders the specified feature into ShapeList.
+ ** Return: New shape list with rendering of Feature added.
+ ** Exceptions: none
+ ** History: Thu Mar 21 14:57:41 1991, DSJ, Created.
+ */
   FLOAT32 X, Y, Dx, Dy, Length;
 
   window->Pen(color);
@@ -1841,14 +1841,15 @@ void RenderIntFeature(ScrollView *window, const INT_FEATURE_STRUCT* Feature,
 
 
 /*---------------------------------------------------------------------------*/
-/*
+/**
  * This routine extracts the parameters of the specified
  * proto from the class description and adds a rendering of
  * the proto onto the ShapeList.
  *
+ * @param ShapeList shape list to append proto rendering onto
  * @param Class   class that proto is contained in
  * @param ProtoId   id of proto to be rendered
- * @param color   color to render proto in
+ * @param Color   color to render proto in
  *
  * Globals: none
  *
@@ -1941,7 +1942,7 @@ int TruncateParam(FLOAT32 Param, int Min, int Max, char *Id) {
 
 
 /*---------------------------------------------------------------------------*/
-#ifndef GRAPHICS_DISABLED
+
 /**
  * Initializes the int matcher window if it is not already
  * initialized.
@@ -1990,4 +1991,3 @@ void InitFeatureDisplayWindowIfReqd() {
 ScrollView* CreateFeatureSpaceWindow(const char* name, int xpos, int ypos) {
   return new ScrollView(name, xpos, ypos, 520, 520, 260, 260, true);
 }
-#endif  // GRAPHICS_DISABLED
