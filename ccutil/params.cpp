@@ -179,26 +179,45 @@ bool ParamUtils::GetParamAsString(const char *name,
   return false;
 }
 
-void ParamUtils::PrintParams(FILE *fp, const ParamsVectors *member_params) {
+void ParamUtils::PrintParams(FILE *fp, const ParamsVectors *member_params, const bool print_with_comments) {
   int v, i;
   int num_iterations = (member_params == NULL) ? 1 : 2;
   for (v = 0; v < num_iterations; ++v) {
     const ParamsVectors *vec = (v == 0) ? GlobalParams() : member_params;
-    for (i = 0; i < vec->int_params.size(); ++i) {
-      fprintf(fp, "%s\t%d\n", vec->int_params[i]->name_str(),
-              (inT32)(*vec->int_params[i]));
-    }
-    for (i = 0; i < vec->bool_params.size(); ++i) {
-      fprintf(fp, "%s\t%d\n", vec->bool_params[i]->name_str(),
-              (BOOL8)(*vec->bool_params[i]));
-    }
-    for (int i = 0; i < vec->string_params.size(); ++i) {
-      fprintf(fp, "%s\t%s\n", vec->string_params[i]->name_str(),
-              vec->string_params[i]->string());
-    }
-    for (int i = 0; i < vec->double_params.size(); ++i) {
-      fprintf(fp, "%s\t%g\n", vec->double_params[i]->name_str(),
-              (double)(*vec->double_params[i]));
+    if (print_with_comments) {
+      for (i = 0; i < vec->int_params.size(); ++i) {
+        fprintf(fp, "%-70s %s (%d)\n", vec->int_params[i]->info_str(), vec->int_params[i]->name_str(),
+                (inT32)(*vec->int_params[i]));
+      }
+      for (i = 0; i < vec->bool_params.size(); ++i) {
+        fprintf(fp, "%-70s %s (%d)\n", vec->bool_params[i]->info_str(), vec->bool_params[i]->name_str(),
+                (BOOL8)(*vec->bool_params[i]));
+      }
+      for (int i = 0; i < vec->string_params.size(); ++i) {
+        fprintf(fp, "%-70s %s (%s)\n", vec->string_params[i]->info_str(), vec->string_params[i]->name_str(),
+                vec->string_params[i]->string());
+      }
+      for (int i = 0; i < vec->double_params.size(); ++i) {
+        fprintf(fp, "%-70s %s (%g)\n", vec->double_params[i]->info_str(), vec->double_params[i]->name_str(),
+                (double)(*vec->double_params[i]));
+      }
+    } else {
+      for (i = 0; i < vec->int_params.size(); ++i) {
+        fprintf(fp, "%s\t%d\n", vec->int_params[i]->name_str(),
+                (inT32)(*vec->int_params[i]));
+      }
+      for (i = 0; i < vec->bool_params.size(); ++i) {
+        fprintf(fp, "%s\t%d\n", vec->bool_params[i]->name_str(),
+                (BOOL8)(*vec->bool_params[i]));
+      }
+      for (int i = 0; i < vec->string_params.size(); ++i) {
+        fprintf(fp, "%s\t%s\n", vec->string_params[i]->name_str(),
+                vec->string_params[i]->string());
+      }
+      for (int i = 0; i < vec->double_params.size(); ++i) {
+        fprintf(fp, "%s\t%g\n", vec->double_params[i]->name_str(),
+                (double)(*vec->double_params[i]));
+      }
     }
   }
 }

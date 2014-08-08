@@ -196,17 +196,17 @@ TESS_API const char* TESS_CALL TessBaseAPIGetStringVariable(const TessBaseAPI* h
     return handle->GetStringVariable(name);
 }
 
-TESS_API void TESS_CALL TessBaseAPIPrintVariables(const TessBaseAPI* handle, FILE* fp)
+TESS_API void TESS_CALL TessBaseAPIPrintVariables(const TessBaseAPI* handle, FILE* fp, const bool print_with_comments)
 {
-    handle->PrintVariables(fp);
+    handle->PrintVariables(fp, print_with_comments);
 }
 
-TESS_API BOOL TESS_CALL TessBaseAPIPrintVariablesToFile(const TessBaseAPI* handle, const char* filename)
+TESS_API BOOL TESS_CALL TessBaseAPIPrintVariablesToFile(const TessBaseAPI* handle, const char* filename, const bool print_with_comments)
 {
     FILE* fp = fopen(filename, "w");
     if (fp != NULL)
     {
-        handle->PrintVariables(fp);
+        handle->PrintVariables(fp, print_with_comments);
         fclose(fp);
         return TRUE;
     }

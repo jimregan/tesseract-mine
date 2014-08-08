@@ -133,7 +133,7 @@ bool Tesseract::ProcessTargetWord(const TBOX& word_box,
       if (backup_config_file_ == NULL) {
         backup_config_file_ = kBackUpConfigFile;
         FILE* config_fp = fopen(backup_config_file_, "wb");
-        ParamUtils::PrintParams(config_fp, params());
+        ParamUtils::PrintParams(config_fp, params(), false);
         fclose(config_fp);
         ParamUtils::ReadParamsFile(word_config,
                                    SET_PARAM_CONSTRAINT_DEBUG_ONLY,

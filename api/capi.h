@@ -145,8 +145,8 @@ TESS_API BOOL  TESS_CALL TessBaseAPIGetDoubleVariable(const TessBaseAPI* handle,
 TESS_API const char*
                TESS_CALL TessBaseAPIGetStringVariable(const TessBaseAPI* handle, const char* name);
 
-TESS_API void  TESS_CALL TessBaseAPIPrintVariables(      const TessBaseAPI* handle, FILE* fp);
-TESS_API BOOL  TESS_CALL TessBaseAPIPrintVariablesToFile(const TessBaseAPI* handle, const char* filename);
+TESS_API void  TESS_CALL TessBaseAPIPrintVariables(      const TessBaseAPI* handle, FILE* fp, const bool print_with_comments);
+TESS_API BOOL  TESS_CALL TessBaseAPIPrintVariablesToFile(const TessBaseAPI* handle, const char* filename, const bool print_with_comments);
 #ifdef TESS_CAPI_INCLUDE_BASEAPI
 TESS_API BOOL  TESS_CALL TessBaseAPIGetVariableAsString(TessBaseAPI* handle, const char* name, STRING* val);
 #endif

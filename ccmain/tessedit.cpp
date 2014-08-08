@@ -136,7 +136,7 @@ bool Tesseract::init_tesseract_lang_data(
   if (((STRING &)tessedit_write_params_to_file).length() > 0) {
     FILE *params_file = fopen(tessedit_write_params_to_file.string(), "wb");
     if (params_file != NULL) {
-      ParamUtils::PrintParams(params_file, this->params());
+      ParamUtils::PrintParams(params_file, this->params(), false);
       fclose(params_file);
       if (tessdata_manager_debug_level > 0) {
         tprintf("Wrote parameters to %s\n",

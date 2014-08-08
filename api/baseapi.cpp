@@ -255,8 +255,8 @@ bool TessBaseAPI::GetVariableAsString(const char *name, STRING *val) {
 }
 
 /** Print Tesseract parameters to the given file. */
-void TessBaseAPI::PrintVariables(FILE *fp) const {
-  ParamUtils::PrintParams(fp, tesseract_->params());
+void TessBaseAPI::PrintVariables(FILE *fp, bool print_with_comments) const {
+  ParamUtils::PrintParams(fp, tesseract_->params(), print_with_comments);
 }
 
 /**
@@ -1183,7 +1183,7 @@ bool TessBaseAPI::ProcessPage(Pix* pix, int page_index, const char* filename,
   if (failed && retry_config != NULL && retry_config[0] != '\0') {
     // Save current config variables before switching modes.
     FILE* fp = fopen(kOldVarsFile, "wb");
-    PrintVariables(fp);
+    PrintVariables(fp, false);
     fclose(fp);
     // Switch to alternate mode for retry.
     ReadConfigFile(retry_config);

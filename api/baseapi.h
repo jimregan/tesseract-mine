@@ -181,7 +181,7 @@ class TESS_API TessBaseAPI {
   /**
    * Print Tesseract parameters to the given file.
    */
-  void PrintVariables(FILE *fp) const;
+  void PrintVariables(FILE *fp, bool print_with_comments) const;
 
   /**
    * Get value of named variable as a string, if it exists.

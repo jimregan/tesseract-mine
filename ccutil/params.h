@@ -103,7 +103,7 @@ class ParamUtils {
                                STRING *value);
 
   // Print parameters to the given file.
-  static void PrintParams(FILE *fp, const ParamsVectors *member_params);
+  static void PrintParams(FILE *fp, const ParamsVectors *member_params, bool print_with_comments);
 
   // Resets all parameters back to default values;
   static void ResetToDefaults(ParamsVectors* member_params);
