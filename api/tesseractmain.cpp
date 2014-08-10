@@ -86,6 +86,7 @@ int main(int argc, char **argv) {
   bool noocr = false;
   bool list_langs = false;
   bool print_parameters = false;
+  bool print_parameters_with_comments = false;
   GenericVector<STRING> vars_vec, vars_values;
 
   tesseract::PageSegMode pagesegmode = tesseract::PSM_AUTO;
@@ -111,6 +112,9 @@ int main(int argc, char **argv) {
     } else if (strcmp(argv[arg], "-psm") == 0 && arg + 1 < argc) {
       pagesegmode = static_cast<tesseract::PageSegMode>(atoi(argv[arg + 1]));
       ++arg;
+    } else if (strcmp(argv[arg], "--print-parameters-with-comments") == 0) {
+      noocr = true;
+      print_parameters_with_comments = true;
     } else if (strcmp(argv[arg], "--print-parameters") == 0) {
       noocr = true;
       print_parameters = true;
@@ -165,6 +169,8 @@ int main(int argc, char **argv) {
                       "engine. Can be used with --tessdata-dir.\n");
     fprintf(stderr, "  --print-parameters: print tesseract parameters to the "
                       "stdout.\n");
+    fprintf(stderr, "  --print-parameters-with-comments: print tesseract parameters and additional information to the "
+                      "stdout.\n");
     exit(1);
   }
 
@@ -218,13 +224,14 @@ int main(int argc, char **argv) {
      exit(0);
   }
 
-  if (print_parameters) {
+  if (print_parameters || print_parameters_with_comments) {
      FILE* fout = stdout;
      fprintf(stdout, "Tesseract parameters:\n");
-     api.PrintVariables(fout);
+     api.PrintVariables(fout, print_parameters_with_comments);
      api.End();
      exit(0);
   }
+
 
   // We have 2 possible sources of pagesegmode: a config file and
   // the command line. For backwards compatability reasons, the
