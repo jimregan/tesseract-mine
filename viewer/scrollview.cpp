@@ -17,30 +17,38 @@
 //
 ///////////////////////////////////////////////////////////////////////
 //
-// This class contains the main ScrollView-logic,
-// e.g. parsing & sending messages, images etc.
-#ifdef WIN32
+
+#include <stdarg.h>
+#include <limits.h>
+#include <string.h>
+#include <map>
+#include <utility>
+#include <algorithm>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <climits>
+
+// Include automatically generated configuration file if running autoconf.
+#ifdef HAVE_CONFIG_H
+#include "config_auto.h"
+#endif
+
+#include "scrollview.h"
+
+#ifdef _MSC_VER
 #pragma warning(disable:4786)  // Don't give stupid warnings for stl
+#pragma warning(disable:4018)  // signed/unsigned warnings
+#pragma warning(disable:4530)  // exception warnings
 #endif
 
 const int kSvPort = 8461;
 const int kMaxMsgSize = 4096;
 const int kMaxIntPairSize = 45;  // Holds %d,%d, for upto 64 bit.
 
-#include "scrollview.h"
-
-#include <stdarg.h>
-#include <map>
-#include <utility>
-#include <algorithm>
-#include <vector>
-#include <string>
-
 #include "svutil.h"
 
-#ifdef HAVE_LIBLEPT
 #include "allheaders.h"
-#endif
 
 struct SVPolyLineBuffer {
   bool empty;  // Independent indicator to allow SendMsg to call SendPolygon.
@@ -50,10 +58,11 @@ struct SVPolyLineBuffer {
 
 // A map between the window IDs and their corresponding pointers.
 static std::map<int, ScrollView*> svmap;
+static SVMutex* svmap_mu;
 // A map of all semaphores waiting for a specific event on a specific window.
 static std::map<std::pair<ScrollView*, SVEventType>,
                 std::pair<SVSemaphore*, SVEvent*> > waiting_for_events;
-SVMutex* mutex_waiting;
+static SVMutex* waiting_for_events_mu;
 
 SVEvent* SVEvent::copy() {
   SVEvent* any = new SVEvent;
@@ -71,10 +80,11 @@ SVEvent* SVEvent::copy() {
   return any;
 }
 
-// This is the main loop which handles the ScrollView-logic from the server
-// to the client. It basically loops through messages, parses them to events
-// and distributes it to the waiting handlers.
-// It is run from a different thread and synchronizes via SVSync.
+#ifndef GRAPHICS_DISABLED
+/// This is the main loop which handles the ScrollView-logic from the server
+/// to the client. It basically loops through messages, parses them to events
+/// and distributes it to the waiting handlers.
+/// It is run from a different thread and synchronizes via SVSync.
 void* ScrollView::MessageReceiver(void* a) {
   int counter_event_id = 0;  // ongoing counter
   char* message = NULL;
@@ -86,77 +96,92 @@ void* ScrollView::MessageReceiver(void* a) {
 // This is the main loop which iterates until the server is dead (strlen = -1).
 // It basically parses for 3 different messagetypes and then distributes the
 // events accordingly.
-  while (strlen(message) != -1) {
-      // The new event we create.
-      SVEvent* cur = new SVEvent;
-      // The ID of the corresponding window.
-      int window_id;
+  while (1) {
+    // The new event we create.
+    SVEvent* cur = new SVEvent;
+    // The ID of the corresponding window.
+    int window_id;
 
-      int ev_type;
+    int ev_type;
 
-      int n;
-      // Fill the new SVEvent properly.
-      sscanf(message, "%d,%d,%d,%d,%d,%d,%d,%n", &window_id, &ev_type, &cur->x,
-             &cur->y, &cur->x_size, &cur->y_size, &cur->command_id, &n);
-      char* p = (message + n);
+    int n;
+    // Fill the new SVEvent properly.
+    sscanf(message, "%d,%d,%d,%d,%d,%d,%d,%n", &window_id, &ev_type, &cur->x,
+           &cur->y, &cur->x_size, &cur->y_size, &cur->command_id, &n);
+    char* p = (message + n);
 
-      cur->window = svmap[window_id];
+    svmap_mu->Lock();
+    cur->window = svmap[window_id];
 
-      if (cur->window != NULL) {
-        cur->parameter = new char[strlen(p) + 1];
-        strncpy(cur->parameter, p, strlen(p) + 1);
-        if (strlen(p) > 0) {  // remove the last \n
-          cur->parameter[strlen(p)] = '\0';
-        }
-        cur->type = static_cast<SVEventType>(ev_type);
-        cur->y = cur->window->TranslateYCoordinate(cur->y);
-        cur->counter = counter_event_id;
-        // Increase by 2 since we will also create an SVET_ANY event from cur,
-        // which will have a counter_id of cur + 1 (and thus gets processed
-        // after cur).
-        counter_event_id += 2;
-
-        // In case of an SVET_EXIT event, quit the whole application.
-        if (ev_type == SVET_EXIT) { ScrollView::Exit(); }
-
-        // Place two copies of it in the table for the window.
-        cur->window->SetEvent(cur);
-
-        // Check if any of the threads currently waiting want it.
-        std::pair<ScrollView*, SVEventType> awaiting_list(cur->window,
-                                                          cur->type);
-        std::pair<ScrollView*, SVEventType> awaiting_list_any(cur->window,
-                                                              SVET_ANY);
-        std::pair<ScrollView*, SVEventType> awaiting_list_any_window(NULL,
-                                                              SVET_ANY);
-        mutex_waiting->Lock();
-        if (waiting_for_events.count(awaiting_list) > 0) {
-          waiting_for_events[awaiting_list].second = cur;
-          waiting_for_events[awaiting_list].first->Signal();
-        } else if (waiting_for_events.count(awaiting_list_any) > 0) {
-          waiting_for_events[awaiting_list_any].second = cur;
-          waiting_for_events[awaiting_list_any].first->Signal();
-        } else if (waiting_for_events.count(awaiting_list_any_window) > 0) {
-          waiting_for_events[awaiting_list_any_window].second = cur;
-          waiting_for_events[awaiting_list_any_window].first->Signal();
-        } else {
-          // No one wanted it, so delete it.
-          delete cur;
-        }
-        mutex_waiting->Unlock();
-        // Signal the corresponding semaphore twice (for both copies).
-        ScrollView* sv = svmap[window_id];
-        if (sv != NULL) {
-          sv->Signal();
-          sv->Signal();
-        }
+    if (cur->window != NULL) {
+      cur->parameter = new char[strlen(p) + 1];
+      strncpy(cur->parameter, p, strlen(p) + 1);
+      if (strlen(p) > 0) {  // remove the last \n
+        cur->parameter[strlen(p)] = '\0';
       }
+      cur->type = static_cast<SVEventType>(ev_type);
+      // Correct selection coordinates so x,y is the min pt and size is +ve.
+      if (cur->x_size > 0)
+        cur->x -= cur->x_size;
+      else
+        cur->x_size = -cur->x_size;
+      if (cur->y_size > 0)
+        cur->y -= cur->y_size;
+      else
+        cur->y_size = -cur->y_size;
+      // Returned y will be the bottom-left if y is reversed.
+      if (cur->window->y_axis_is_reversed_)
+        cur->y = cur->window->TranslateYCoordinate(cur->y + cur->y_size);
+      cur->counter = counter_event_id;
+      // Increase by 2 since we will also create an SVET_ANY event from cur,
+      // which will have a counter_id of cur + 1 (and thus gets processed
+      // after cur).
+      counter_event_id += 2;
 
-      // Wait until a new message appears in the input stream_.
-      do {
-        message = ScrollView::GetStream()->Receive();
-      } while (message == NULL);
+      // In case of an SVET_EXIT event, quit the whole application.
+      if (ev_type == SVET_EXIT) { ScrollView::Exit(); }
+
+      // Place two copies of it in the table for the window.
+      cur->window->SetEvent(cur);
+
+      // Check if any of the threads currently waiting want it.
+      std::pair<ScrollView*, SVEventType> awaiting_list(cur->window,
+                                                        cur->type);
+      std::pair<ScrollView*, SVEventType> awaiting_list_any(cur->window,
+                                                            SVET_ANY);
+      std::pair<ScrollView*, SVEventType> awaiting_list_any_window((ScrollView*)0,
+                                                            SVET_ANY);
+      waiting_for_events_mu->Lock();
+      if (waiting_for_events.count(awaiting_list) > 0) {
+        waiting_for_events[awaiting_list].second = cur;
+        waiting_for_events[awaiting_list].first->Signal();
+      } else if (waiting_for_events.count(awaiting_list_any) > 0) {
+        waiting_for_events[awaiting_list_any].second = cur;
+        waiting_for_events[awaiting_list_any].first->Signal();
+      } else if (waiting_for_events.count(awaiting_list_any_window) > 0) {
+        waiting_for_events[awaiting_list_any_window].second = cur;
+        waiting_for_events[awaiting_list_any_window].first->Signal();
+      } else {
+        // No one wanted it, so delete it.
+        delete cur;
+      }
+      waiting_for_events_mu->Unlock();
+      // Signal the corresponding semaphore twice (for both copies).
+      ScrollView* sv = svmap[window_id];
+      if (sv != NULL) {
+        sv->Signal();
+        sv->Signal();
+      }
+    } else {
+      delete cur;  // Applied to no window.
     }
+    svmap_mu->Unlock();
+
+    // Wait until a new message appears in the input stream_.
+    do {
+      message = ScrollView::GetStream()->Receive();
+    } while (message == NULL);
+  }
   return 0;
 }
 
@@ -220,15 +245,16 @@ int table_colors[ScrollView::GREEN_YELLOW+1][4]= {
 
 SVNetwork* ScrollView::stream_ = NULL;
 int ScrollView::nr_created_windows_ = 0;
+int ScrollView::image_index_ = 0;
 
-// Calls Initialize with all arguments given.
+/// Calls Initialize with all arguments given.
 ScrollView::ScrollView(const char* name, int x_pos, int y_pos, int x_size,
                        int y_size, int x_canvas_size, int y_canvas_size,
                        bool y_axis_reversed, const char* server_name) {
   Initialize(name, x_pos, y_pos, x_size, y_size, x_canvas_size, y_canvas_size,
              y_axis_reversed, server_name);}
 
-// Calls Initialize with default argument for server_name_.
+/// Calls Initialize with default argument for server_name_.
 ScrollView::ScrollView(const char* name, int x_pos, int y_pos, int x_size,
                        int y_size, int x_canvas_size, int y_canvas_size,
                        bool y_axis_reversed) {
@@ -236,14 +262,14 @@ ScrollView::ScrollView(const char* name, int x_pos, int y_pos, int x_size,
              y_axis_reversed, "localhost");
 }
 
-// Calls Initialize with default argument for server_name_ & y_axis_reversed.
+/// Calls Initialize with default argument for server_name_ & y_axis_reversed.
 ScrollView::ScrollView(const char* name, int x_pos, int y_pos, int x_size,
                        int y_size, int x_canvas_size, int y_canvas_size) {
   Initialize(name, x_pos, y_pos, x_size, y_size, x_canvas_size, y_canvas_size,
              false, "localhost");
 }
 
-// Sets up a ScrollView window, depending on the constructor variables.
+/// Sets up a ScrollView window, depending on the constructor variables.
 void ScrollView::Initialize(const char* name, int x_pos, int y_pos, int x_size,
                             int y_size, int x_canvas_size, int y_canvas_size,
                             bool y_axis_reversed, const char* server_name) {
@@ -252,7 +278,8 @@ void ScrollView::Initialize(const char* name, int x_pos, int y_pos, int x_size,
   if (stream_ == NULL) {
     nr_created_windows_ = 0;
     stream_ = new SVNetwork(server_name, kSvPort);
-    mutex_waiting = new SVMutex();
+    waiting_for_events_mu = new SVMutex();
+    svmap_mu = new SVMutex();
     SendRawMessage(
         "svmain = luajava.bindClass('com.google.scrollview.ScrollView')\n");
     SVSync::StartThread(MessageReceiver, NULL);
@@ -261,6 +288,7 @@ void ScrollView::Initialize(const char* name, int x_pos, int y_pos, int x_size,
   // Set up the variables on the clientside.
   nr_created_windows_++;
   event_handler_ = NULL;
+  event_handler_ended_ = false;
   y_axis_is_reversed_ = y_axis_reversed;
   y_size_ = y_canvas_size;
   window_name_ = name;
@@ -269,7 +297,9 @@ void ScrollView::Initialize(const char* name, int x_pos, int y_pos, int x_size,
   points_ = new SVPolyLineBuffer;
   points_->empty = true;
 
+  svmap_mu->Lock();
   svmap[window_id_] = this;
+  svmap_mu->Unlock();
 
   for (int i = 0; i < SVET_COUNT; i++) {
     event_table_[i] = NULL;
@@ -290,7 +320,7 @@ void ScrollView::Initialize(const char* name, int x_pos, int y_pos, int x_size,
   SVSync::StartThread(StartEventHandler, this);
 }
 
-// Sits and waits for events on this window.
+/// Sits and waits for events on this window.
 void* ScrollView::StartEventHandler(void* a) {
   ScrollView* sv = reinterpret_cast<ScrollView*>(a);
   SVEvent* new_event;
@@ -299,14 +329,14 @@ void* ScrollView::StartEventHandler(void* a) {
     stream_->Flush();
     sv->semaphore_->Wait();
     new_event = NULL;
-    int serial = INT_MAX;
+    int serial = -1;
     int k = -1;
     sv->mutex_->Lock();
     // Check every table entry if he is is valid and not already processed.
 
     for (int i = 0; i < SVET_COUNT; i++) {
-      if ((sv->event_table_[i] != NULL) &&
-          (sv->event_table_[i]->counter < serial)) {
+      if (sv->event_table_[i] != NULL &&
+          (serial < 0 || sv->event_table_[i]->counter < serial)) {
         new_event = sv->event_table_[i];
         serial = sv->event_table_[i]->counter;
         k = i;
@@ -317,30 +347,51 @@ void* ScrollView::StartEventHandler(void* a) {
       sv->event_table_[k] = NULL;
       sv->mutex_->Unlock();
       if (sv->event_handler_ != NULL) { sv->event_handler_->Notify(new_event); }
-      if (new_event->type == SVET_DESTROY) { sv = NULL; }
+      if (new_event->type == SVET_DESTROY) {
+        // Signal the destructor that it is safe to terminate.
+        sv->event_handler_ended_ = true;
+        sv = NULL;
+      }
       delete new_event;  // Delete the pointer after it has been processed.
     } else { sv->mutex_->Unlock(); }
   // The thread should run as long as its associated window is alive.
   } while (sv != NULL);
   return 0;
 }
+#endif  // GRAPHICS_DISABLED
 
 ScrollView::~ScrollView() {
+  #ifndef GRAPHICS_DISABLED
+  svmap_mu->Lock();
   if (svmap[window_id_] != NULL) {
+    svmap_mu->Unlock();
     // So the event handling thread can quit.
     SendMsg("destroy()");
 
     SVEvent* sve = AwaitEvent(SVET_DESTROY);
     delete sve;
+    svmap_mu->Lock();
+    svmap[window_id_] = NULL;
+    svmap_mu->Unlock();
+    // The event handler thread for this window *must* receive the
+    // destroy event and set its pointer to this to NULL before we allow
+    // the destructor to exit.
+    while (!event_handler_ended_)
+      Update();
+  } else {
+    svmap_mu->Unlock();
   }
   delete mutex_;
   delete semaphore_;
   delete points_;
-
-  svmap.erase(window_id_);
+  for (int i = 0; i < SVET_COUNT; i++) {
+    delete event_table_[i];
+  }
+  #endif  // GRAPHICS_DISABLED
 }
 
-// Send a message to the server, attaching the window id.
+#ifndef GRAPHICS_DISABLED
+/// Send a message to the server, attaching the window id.
 void ScrollView::SendMsg(const char* format, ...) {
   if (!points_->empty)
     SendPolygon();
@@ -357,13 +408,13 @@ void ScrollView::SendMsg(const char* format, ...) {
   stream_->Send(form);
 }
 
-// Send a message to the server without a
-// window id. Used for global events like exit().
+/// Send a message to the server without a
+/// window id. Used for global events like exit().
 void ScrollView::SendRawMessage(const char* msg) {
   stream_->Send(msg);
 }
 
-// Add an Event Listener to this ScrollView Window
+/// Add an Event Listener to this ScrollView Window
 void ScrollView::AddEventHandler(SVEventHandler* listener) {
   event_handler_ = listener;
 }
@@ -392,24 +443,25 @@ void ScrollView::SetEvent(SVEvent* svevent) {
 }
 
 
-// Block until an event of the given type is received.
-// Note: The calling function is responsible for deleting the returned
-// SVEvent afterwards!
+/// Block until an event of the given type is received.
+/// Note: The calling function is responsible for deleting the returned
+/// SVEvent afterwards!
 SVEvent* ScrollView::AwaitEvent(SVEventType type) {
   // Initialize the waiting semaphore.
   SVSemaphore* sem = new SVSemaphore();
   std::pair<ScrollView*, SVEventType> ea(this, type);
-  mutex_waiting->Lock();
-  waiting_for_events[ea] = std::pair<SVSemaphore*, SVEvent*> (sem, NULL);
-  mutex_waiting->Unlock();
+  waiting_for_events_mu->Lock();
+  waiting_for_events[ea] = std::pair<SVSemaphore*, SVEvent*> (sem, (SVEvent*)0);
+  waiting_for_events_mu->Unlock();
   // Wait on it, but first flush.
   stream_->Flush();
   sem->Wait();
   // Process the event we got woken up for (its in waiting_for_events pair).
-  mutex_waiting->Lock();
+  waiting_for_events_mu->Lock();
   SVEvent* ret = waiting_for_events[ea].second;
   waiting_for_events.erase(ea);
-  mutex_waiting->Unlock();
+  delete sem;
+  waiting_for_events_mu->Unlock();
   return ret;
 }
 
@@ -418,18 +470,18 @@ SVEvent* ScrollView::AwaitEvent(SVEventType type) {
 SVEvent* ScrollView::AwaitEventAnyWindow() {
   // Initialize the waiting semaphore.
   SVSemaphore* sem = new SVSemaphore();
-  std::pair<ScrollView*, SVEventType> ea(NULL, SVET_ANY);
-  mutex_waiting->Lock();
-  waiting_for_events[ea] = std::pair<SVSemaphore*, SVEvent*> (sem, NULL);
-  mutex_waiting->Unlock();
+  std::pair<ScrollView*, SVEventType> ea((ScrollView*)0, SVET_ANY);
+  waiting_for_events_mu->Lock();
+  waiting_for_events[ea] = std::pair<SVSemaphore*, SVEvent*> (sem, (SVEvent*)0);
+  waiting_for_events_mu->Unlock();
   // Wait on it.
   stream_->Flush();
   sem->Wait();
   // Process the event we got woken up for (its in waiting_for_events pair).
-  mutex_waiting->Lock();
+  waiting_for_events_mu->Lock();
   SVEvent* ret = waiting_for_events[ea].second;
   waiting_for_events.erase(ea);
-  mutex_waiting->Unlock();
+  waiting_for_events_mu->Unlock();
   return ret;
 }
 
@@ -552,6 +604,8 @@ void ScrollView::Stroke(float width) {
 // Draw a rectangle using the current pen color.
 // The rectangle is filled with the current brush color.
 void ScrollView::Rectangle(int x1, int y1, int x2, int y2) {
+  if (x1 == x2 && y1 == y2)
+    return;  // Scrollviewer locks up.
   SendMsg("drawRectangle(%d,%d,%d,%d)",
     x1, TranslateYCoordinate(y1), x2, TranslateYCoordinate(y2));
 }
@@ -659,11 +713,13 @@ void ScrollView::UpdateWindow() {
 
 // Note: this is an update to all windows
 void ScrollView::Update() {
+  svmap_mu->Lock();
   for (std::map<int, ScrollView*>::iterator iter = svmap.begin();
       iter != svmap.end(); ++iter) {
     if (iter->second != NULL)
       iter->second->UpdateWindow();
   }
+  svmap_mu->Unlock();
 }
 
 // Set the pen color, using an enum value (e.g. ScrollView::ORANGE)
@@ -713,81 +769,48 @@ void ScrollView::ZoomToRectangle(int x1, int y1, int x2, int y2) {
           MIN(x1, x2), MIN(y1, y2), MAX(x1, x2), MAX(y1, y2));
 }
 
-#ifdef HAVE_LIBLEPT
-// Send an image of type PIX.
-void ScrollView::Image(PIX* image, int x_pos, int y_pos) {
-  int width = image->w;
-  int height = image->h;
-  l_uint32 bpp = image->d;
-  // PIX* do not have a unique identifier/name associated, so name them "lept".
-  SendMsg("createImage('%s',%d,%d,%d)", "lept", width, height, bpp);
-
-  if (bpp == 32) {
-    Transfer32bppImage(image);
-  } else if (bpp == 8) {
-    TransferGrayImage(image);
-  } else if (bpp == 1) {
-    TransferBinaryImage(image);
-  }
-  // PIX* do not have a unique identifier/name associated, so name them "lept".
-  SendMsg("drawImage('%s',%d,%d)", "lept", x_pos, y_pos);
-}
-
-// Sends each pixel as hex value like html, e.g. #00FF00 for green.
-void ScrollView::Transfer32bppImage(PIX* image) {
-  int ppL = pixGetWidth(image);
-  int h = pixGetHeight(image);
-  int wpl = pixGetWpl(image);
-  int transfer_size= ppL * 7 + 2;
-  char* pixel_data = new char[transfer_size];
-  for (int y = 0; y < h; ++y) {
-    l_uint32* data = pixGetData(image) + y*wpl;
-    for (int x = 0; x < ppL; ++x, ++data) {
-      snprintf(&pixel_data[x*7], 7, "#%.2x%.2x%.2x",
-               GET_DATA_BYTE(data, COLOR_RED),
-               GET_DATA_BYTE(data, COLOR_GREEN),
-               GET_DATA_BYTE(data, COLOR_BLUE));
-    }
-    pixel_data[transfer_size - 2] = '\n';
-    pixel_data[transfer_size - 1] = '\0';
-    SendRawMessage(pixel_data);
-  }
-  delete[] pixel_data;
-}
-
-// Sends for each pixel either '1' or '0'.
-void ScrollView::TransferGrayImage(PIX* image) {
-  char* pixel_data = new char[image->w * 2 + 2];
-  for (int y = 0; y < image->h; y++) {
-    l_uint32* data = pixGetData(image) + y * pixGetWpl(image);
-    for (int x = 0; x < image->w; x++) {
-      snprintf(&pixel_data[x*2], 2, "%.2x", (GET_DATA_BYTE(data, x)));
-      pixel_data[image->w * 2] = '\n';
-      pixel_data[image->w * 2 + 1] = '\0';
-      SendRawMessage(pixel_data);
+// Send an image of type Pix.
+void ScrollView::Image(struct Pix* image, int x_pos, int y_pos) {
+  l_uint8* data;
+  size_t size;
+  pixWriteMem(&data, &size, image, IFF_PNG);
+  int base64_len = (size + 2) / 3 * 4;
+  y_pos = TranslateYCoordinate(y_pos);
+  SendMsg("readImage(%d,%d,%d)", x_pos, y_pos, base64_len);
+  // Base64 encode the data.
+  const char kBase64Table[64] = {
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
+    'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+    'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
+    'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
+    'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+    'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+    'w', 'x', 'y', 'z', '0', '1', '2', '3',
+    '4', '5', '6', '7', '8', '9', '+', '/',
+  };
+  char* base64 = new char[base64_len + 1];
+  memset(base64, '=', base64_len);
+  base64[base64_len] = '\0';
+  int remainder = 0;
+  int bits_left = 0;
+  int code_len = 0;
+  for (int i = 0; i < size; ++i) {
+    int code = (data[i] >> (bits_left + 2)) | remainder;
+    base64[code_len++] = kBase64Table[code & 63];
+    bits_left += 2;
+    remainder = data[i] << (6 - bits_left);
+    if (bits_left == 6) {
+      base64[code_len++] = kBase64Table[remainder & 63];
+      bits_left = 0;
+      remainder = 0;
     }
   }
-  delete [] pixel_data;
+  if (bits_left > 0)
+    base64[code_len++] = kBase64Table[remainder & 63];
+  SendRawMessage(base64);
+  delete [] base64;
+  free(data);
 }
-
-// Sends for each pixel either '1' or '0'.
-void ScrollView::TransferBinaryImage(PIX* image) {
-  char* pixel_data = new char[image->w + 2];
-  for (int y = 0; y < image->h; y++) {
-    l_uint32* data = pixGetData(image) + y * pixGetWpl(image);
-    for (int x = 0; x < image->w; x++) {
-      if (GET_DATA_BIT(data, x))
-        pixel_data[x] = '1';
-      else
-        pixel_data[x] = '0';
-    }
-    pixel_data[image->w] = '\n';
-    pixel_data[image->w + 1] = '\0';
-    SendRawMessage(pixel_data);
-  }
-  delete [] pixel_data;
-}
-#endif
 
 // Escapes the ' character with a \, so it can be processed by LUA.
 // Note: The caller will have to make sure he deletes the newly allocated item.
@@ -814,3 +837,5 @@ int ScrollView::TranslateYCoordinate(int y) {
   if (!y_axis_is_reversed_) { return y;
   } else { return y_size_ - y; }
 }
+
+#endif  // GRAPHICS_DISABLED

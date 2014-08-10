@@ -15,112 +15,109 @@
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
  ******************************************************************************/
-/**----------------------------------------------------------------------------
+/*-----------------------------------------------------------------------------
           Include Files and Type Defines
-----------------------------------------------------------------------------**/
+-----------------------------------------------------------------------------*/
 #include "float2int.h"
 #include "normmatch.h"
 #include "mfoutline.h"
+#include "classify.h"
+#include "helpers.h"
 #include "picofeat.h"
 
 #define MAX_INT_CHAR_NORM (INT_CHAR_NORM_RANGE - 1)
 
-/**----------------------------------------------------------------------------
+/*-----------------------------------------------------------------------------
               Public Code
-----------------------------------------------------------------------------**/
+-----------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-void ClearCharNormArray(INT_TEMPLATES Templates,
-                        CLASS_NORMALIZATION_ARRAY CharNormArray) {
-/*
- **	Parameters:
- **		Templates	specifies classes currently defined
- **		CharNormArray	array to be cleared
- **	Globals: none
- **	Operation: For each class in Templates, clear the corresponding
- **		entry in CharNormArray.  CharNormArray is indexed by class
- **		indicies (as obtained from Templates) rather than class id's.
- **	Return: none
- **	Exceptions: none
- **	History: Wed Feb 20 11:20:54 1991, DSJ, Created.
+namespace tesseract {
+
+/**
+ * For each class in the unicharset, clears the corresponding
+ * entry in char_norm_array.  char_norm_array is indexed by unichar_id.
+ *
+ * Globals: 
+ * - none
+ *
+ * @param char_norm_array array to be cleared
+ *
+ * @note Exceptions: none
+ * @note History: Wed Feb 20 11:20:54 1991, DSJ, Created.
  */
-  int i;
-
-  for (i = 0; i < NumClassesIn (Templates); i++) {
-    CharNormArray[i] = 0;
-  }
-
+void Classify::ClearCharNormArray(uinT8* char_norm_array) {
+  memset(char_norm_array, 0, sizeof(*char_norm_array) * unicharset.size());
 }                                /* ClearCharNormArray */
 
 
 /*---------------------------------------------------------------------------*/
-void ComputeIntCharNormArray(FEATURE NormFeature,
-                             INT_TEMPLATES Templates,
-                             CLASS_NORMALIZATION_ARRAY CharNormArray) {
-/*
- **	Parameters:
- **		NormFeature	character normalization feature
- **		Templates	specifies classes currently defined
- **		CharNormArray	place to put results
- **	Globals: none
- **	Operation: For each class in Templates, compute the match between
- **		NormFeature and the normalization protos for that class.
- **		Convert this number to the range from 0 - 255 and store it
- **		into CharNormArray.  CharNormArray is indexed by class
- **		indicies (as obtained from Templates) rather than class id's.
- **	Return: none (results are returned in CharNormArray)
- **	Exceptions: none
- **	History: Wed Feb 20 11:20:54 1991, DSJ, Created.
+/** 
+ * For each class in unicharset, computes the match between
+ * norm_feature and the normalization protos for that class.
+ * Converts this number to the range from 0 - 255 and stores it
+ * into char_norm_array.  CharNormArray is indexed by unichar_id.
+ *
+ * Globals: 
+ * - PreTrainedTemplates current set of built-in templates
+ *
+ * @param norm_feature character normalization feature
+ * @param[out] char_norm_array place to put results of size unicharset.size()
+ *
+ * @note Exceptions: none
+ * @note History: Wed Feb 20 11:20:54 1991, DSJ, Created.
  */
-  int i;
-  int NormAdjust;
-
-  for (i = 0; i < NumClassesIn (Templates); i++) {
-    NormAdjust = (int) (INT_CHAR_NORM_RANGE *
-      ComputeNormMatch (ClassIdForIndex (Templates, i),
-      NormFeature, FALSE));
-    if (NormAdjust < 0)
-      NormAdjust = 0;
-    else if (NormAdjust > MAX_INT_CHAR_NORM)
-      NormAdjust = MAX_INT_CHAR_NORM;
-
-    CharNormArray[i] = NormAdjust;
+void Classify::ComputeIntCharNormArray(const FEATURE_STRUCT& norm_feature,
+                                       uinT8* char_norm_array) {
+  for (int i = 0; i < unicharset.size(); i++) {
+    if (i < PreTrainedTemplates->NumClasses) {
+      int norm_adjust = static_cast<int>(INT_CHAR_NORM_RANGE *
+        ComputeNormMatch(i, norm_feature, FALSE));
+      char_norm_array[i] = ClipToRange(norm_adjust, 0, MAX_INT_CHAR_NORM);
+    } else {
+      // Classes with no templates (eg. ambigs & ligatures) default
+      // to worst match.
+      char_norm_array[i] = MAX_INT_CHAR_NORM;
+    }
   }
-
 }                                /* ComputeIntCharNormArray */
 
 
 /*---------------------------------------------------------------------------*/
-void ComputeIntFeatures(FEATURE_SET Features, INT_FEATURE_ARRAY IntFeatures) {
-/*
- **	Parameters:
- **		Features	floating point pico-features to be converted
- **		IntFeatures	array to put converted features into
- **	Globals: none
- **	Operation: This routine converts each floating point pico-feature
- **		in Features into integer format and saves it into
- **		IntFeatures.
- **	Return: none (results are returned in IntFeatures)
- **	Exceptions: none
- **	History: Wed Feb 20 10:58:45 1991, DSJ, Created.
+/**
+ * This routine converts each floating point pico-feature
+ * in Features into integer format and saves it into
+ * IntFeatures.
+ *
+ * Globals: 
+ * - none
+ *
+ * @param Features floating point pico-features to be converted
+ * @param[out] IntFeatures array to put converted features into
+ *
+ * @note Exceptions: none
+ * @note History: Wed Feb 20 10:58:45 1991, DSJ, Created.
  */
+void Classify::ComputeIntFeatures(FEATURE_SET Features,
+                                  INT_FEATURE_ARRAY IntFeatures) {
   int Fid;
   FEATURE Feature;
   FLOAT32 YShift;
 
-  if (NormMethod == baseline)
+  if (classify_norm_method == baseline)
     YShift = BASELINE_Y_SHIFT;
   else
     YShift = Y_SHIFT;
 
-  for (Fid = 0; Fid < NumFeaturesIn (Features); Fid++) {
-    Feature = FeatureIn (Features, Fid);
+  for (Fid = 0; Fid < Features->NumFeatures; Fid++) {
+    Feature = Features->Features[Fid];
 
-    IntFeatures[Fid].X = BucketFor (ParamOf (Feature, PicoFeatX),
+    IntFeatures[Fid].X = BucketFor (Feature->Params[PicoFeatX],
       X_SHIFT, INT_FEAT_RANGE);
-    IntFeatures[Fid].Y = BucketFor (ParamOf (Feature, PicoFeatY),
+    IntFeatures[Fid].Y = BucketFor (Feature->Params[PicoFeatY],
       YShift, INT_FEAT_RANGE);
-    IntFeatures[Fid].Theta = CircBucketFor (ParamOf (Feature, PicoFeatDir),
+    IntFeatures[Fid].Theta = CircBucketFor (Feature->Params[PicoFeatDir],
       ANGLE_SHIFT, INT_FEAT_RANGE);
     IntFeatures[Fid].CP_misses = 0;
   }
 }                                /* ComputeIntFeatures */
+}  // namespace tesseract

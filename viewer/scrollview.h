@@ -29,8 +29,10 @@
 // API calls at all and generate a java user interface from scratch (or
 // basically generate any kind of java program, possibly even dangerous ones).
 
-#ifndef THIRD_PARTY_TESSERACT_VIEWER_SCROLLVIEW_H__
-#define THIRD_PARTY_TESSERACT_VIEWER_SCROLLVIEW_H__
+#ifndef TESSERACT_VIEWER_SCROLLVIEW_H__
+#define TESSERACT_VIEWER_SCROLLVIEW_H__
+// TODO(rays) Move ScrollView into the tesseract namespace.
+#ifndef OCR_SCROLLVIEW_H__
 
 #include <stdio.h>
 
@@ -83,6 +85,8 @@ struct SVEvent {
 // called whenever an appropriate event occurs.
 class SVEventHandler {
   public:
+    virtual ~SVEventHandler() {}
+
 // Gets called by the SV Window. Does nothing on default, overwrite this
 // to implement the desired behaviour
     virtual void Notify(const SVEvent* sve) { }
@@ -150,6 +154,10 @@ class ScrollView {
     GREEN_YELLOW  // Make sure this one is last.
 };
 
+  ~ScrollView();
+
+#ifndef GRAPHICS_DISABLED
+
 // Create a window. The pixel size of the window may be 0,0, in which case
 // a default size is selected based on the size of your canvas.
 // The canvas may not be 0,0 in size!
@@ -162,8 +170,6 @@ class ScrollView {
   ScrollView(const char* name, int x_pos, int y_pos, int x_size, int y_size,
              int x_canvas_size, int y_canvas_size, bool y_axis_reversed,
              const char* server_name);
-  ~ScrollView();
-
 /*******************************************************************************
 * Event handling
 * To register as listener, the class has to derive from the SVEventHandler
@@ -197,10 +203,8 @@ class ScrollView {
 * constructor, so this is not listed here)
 *******************************************************************************/
 
-#ifdef HAVE_LIBLEPT
 // Draw a Pix on (x,y).
   void Image(struct Pix* image, int x_pos, int y_pos);
-#endif
 
 // Flush buffers and update display.
   static void Update();
@@ -343,14 +347,12 @@ class ScrollView {
   int TranslateYCoordinate(int y);
 
  private:
-#ifdef HAVE_LIBLEPT
 // Transfers a binary Image.
   void TransferBinaryImage(struct Pix* image);
 // Transfers a gray scale Image.
   void TransferGrayImage(struct Pix* image);
 // Transfers a 32-Bit Image.
   void Transfer32bppImage(struct Pix* image);
-#endif
 
 // Sets up ScrollView, depending on the variables from the constructor.
   void Initialize(const char* name, int x_pos, int y_pos, int x_size,
@@ -388,10 +390,15 @@ class ScrollView {
   SVPolyLineBuffer* points_;
   // Whether the axis is reversed.
   bool y_axis_is_reversed_;
+  // Set to true only after the event handler has terminated.
+  bool event_handler_ended_;
   // If the y axis is reversed, flip all y values by ySize.
   int y_size_;
   // # of created windows (used to assign an id to each ScrollView* for svmap).
   static int nr_created_windows_;
+  // Serial number of sent images to ensure that the viewer knows they
+  // are distinct.
+  static int image_index_;
 
   // The stream through which the c++ client is connected to the server.
   static SVNetwork* stream_;
@@ -404,6 +411,8 @@ class ScrollView {
 
   // Semaphore to the thread belonging to this window.
   SVSemaphore* semaphore_;
+#endif  // GRAPHICS_DISABLED
 };
 
-#endif  // THIRD_PARTY_TESSERACT_VIEWER_SCROLLVIEW_H__
+#endif  // OCR_SCROLLVIEW_H__
+#endif  // TESSERACT_VIEWER_SCROLLVIEW_H__

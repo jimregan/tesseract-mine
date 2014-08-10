@@ -1,13 +1,30 @@
-SUBDIRS =
-AM_CPPFLAGS = -I$(top_srcdir)/cutil -I$(top_srcdir)/ccutil
+AM_CPPFLAGS += -I$(top_srcdir)/cutil -I$(top_srcdir)/ccutil \
+    -I$(top_srcdir)/ccstruct -I$(top_srcdir)/viewer
+    
+if VISIBILITY
+AM_CPPFLAGS += -DTESS_EXPORTS \
+    -fvisibility=hidden -fvisibility-inlines-hidden
+endif
 
-include_HEADERS = \
-    choicearr.h choices.h context.h dawg.h hyphen.h matchdefs.h \
-    permdawg.h permnum.h permute.h states.h stopper.h trie.h \
-    lookdawg.h makedawg.h reduce.h permngram.h
+noinst_HEADERS = \
+    dawg.h dawg_cache.h dict.h matchdefs.h \
+    stopper.h trie.h
 
-lib_LIBRARIES = libtesseract_dict.a
-libtesseract_dict_a_SOURCES = \
-    choices.cpp context.cpp dawg.cpp hyphen.cpp permdawg.cpp \
-    permnum.cpp permute.cpp states.cpp stopper.cpp trie.cpp \
-    lookdawg.cpp makedawg.cpp reduce.cpp permngram.cpp
+if !USING_MULTIPLELIBS
+noinst_LTLIBRARIES = libtesseract_dict.la
+else
+lib_LTLIBRARIES = libtesseract_dict.la
+libtesseract_dict_la_LDFLAGS = -version-info $(GENERIC_LIBRARY_VERSION)
+libtesseract_dict_la_LIBADD = \
+    ../ccutil/libtesseract_ccutil.la \
+    ../cutil/libtesseract_cutil.la \
+    ../ccstruct/libtesseract_ccstruct.la \
+    ../viewer/libtesseract_viewer.la
+endif
+
+libtesseract_dict_la_SOURCES = \
+    context.cpp \
+    dawg.cpp dawg_cache.cpp dict.cpp hyphen.cpp \
+    permdawg.cpp stopper.cpp trie.cpp
+
+

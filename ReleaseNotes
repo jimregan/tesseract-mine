@@ -1,3 +1,72 @@
+= Tesseract release notes Feb 01 2012 - V3.02 =
+  * Added Right-to-left/Bidi capability in the output iterators for Hebrew/Arabic.
+  * Added paragraph detection in layout analysis/post OCR.
+  * Added simultaneous multi-language capability.
+  * Added experimental equation detector.
+  * Major improvements to layout analysis for better image detection, diacritic detection, better textline finding, better tabstop finding.
+  * Improved line detection and removal.
+  * Added fixed pitch chopper for CJK.
+  * Added word bigram correction.
+  * Added new uniform classifier API.
+  * Added new training error counter.
+  * More detailed changes recorded in ChangeLog.
+
+
+= Tesseract release notes Oct 21 2011 - V3.01 =
+  * Thread-safety! Moved all critical globals and statics to members of the appropriate class. Tesseract is now thread-safe (multiple instances can be used in parallel in multiple threads.) with the minor exception that some control parameters are still global and affect all threads.
+  * Added Cube, a new recognizer for Arabic. Cube can also be used in combination with normal Tesseract for other languages with an improvement in accuracy at the cost of (much) lower speed. *There is no training module for Cube yet.*
+  * `OcrEngineMode` in `Init` replaces `AccuracyVSpeed` to control cube.
+  * Greatly improved segmentation search with consequent accuracy and speed improvements, especially for Chinese.
+  * Added `PageIterator` and `ResultIterator` as cleaner ways to get the full results out of Tesseract, that are not currently provided by any of the `TessBaseAPI::Get*` methods. All other methods, such as the `ETEXT_STRUCT` in particular are deprecated and will be deleted in the future.
+  * ApplyBoxes totally rewritten to make training easier. It can now cope with touching/overlapping training characters, and a new boxfile format allows word boxes instead of character boxes, BUT to use that you have to have already boostrapped the language with character boxes. "Cyclic dependency" on traineddata.
+  * Auto orientation and script detection added to page layout analysis.
+  * Deleted *lots* of dead code.
+  * Fixxht module replaced with scalable data-driven module.
+  * Output font characteristics accuracy improved.
+  * Removed the double conversion at each classification.
+  * Upgraded oldest structs to be classes and deprecated PBLOB.
+  * Removed non-deterministic baseline fit.
+  * Added fixed length dawgs for Chinese.
+  * Handling of vertical text improved.
+  * Handling of leader dots improved.
+  * Table detection greatly improved.
+  * Fixed a couple of memory leaks.
+  * Fixed font labels on output text. (Not perfect, but a lot better than before.)
+  * Cleanup and more bug fixes
+  * Special treatments for Hindi.
+  * Support for build in VS2010 with Microsoft Windows SDK for Windows 7 (thanks to Michael Lutz)
+
+Tesseract release notes Sep 30 2010 - V3.00
+  * Preparations for thread safety:
+     * Changed TessBaseAPI methods to be non-static
+     * Created a class hierarchy for the directories to hold instance data,
+       and began moving code into the classes.
+     * Moved thresholding code to a separate class.
+  * Added major new page layout analysis module.
+  * Added HOCR output.
+  * Added Leptonica as main image I/O and handling. Currently optional,
+    but in future releases linking with Leptonica will be mandatory.
+  * Ambiguity table rewritten to allow definite replacements in place
+    of fix_quotes.
+  * Added TessdataManager to combine data files into a single file.
+  * Some dead code deleted.
+  * VC++6 no longer supported. It can't cope with the use of templates.
+  * Many more languages added. 
+  * Doxygenation of most of the function header comments.
+
+Tesseract release notes June 30 2009 - V2.04
+Integrated patches for portability and to remove some of the
+"access" macros.
+Removed dependence on lua from the viewer making it a *lot*
+faster. Also the viewer now compiles and works (on Linux.)
+Fixed the following issues:
+1, 63, 67, 71, 76, 79, 81, 82, 84, 106, 108, 111, 112, 128, 129, 130, 133, 135,
+142, 143, 145, 146, 147, 153, 154, 160, 165, 169, 170, 175, 177, 187, 192,
+195, 199, 201, 205, 209.
+This is the last version to support VC++6!
+This may also be the last version to compile without leptonica!
+Windows version now outputs to stderr by default, fixing a lot of the problems with lack of visible meaningful error messages.
+
 Tesseract release notes April 22 2008 - V2.03
 2.02 was unrunnable, due to a last-minute "simple" change.
 2.03 fixes the problem and also adds an include check for leptonica

@@ -26,6 +26,7 @@
 #include          "rect.h"
 
 class ROW;
+struct Pix;
 
 class QSPLINE
 {
@@ -37,7 +38,7 @@ class QSPLINE
                                   QSPLINE *,
                                   float);
   friend void make_holed_baseline(TBOX *, int, QSPLINE *, QSPLINE *, float);
-  friend void tweak_row_baseline(ROW *);
+  friend void tweak_row_baseline(ROW *, double, double);
   public:
     QSPLINE() {  //empty constructor
       segments = 0;
@@ -80,26 +81,11 @@ class QSPLINE
               ScrollView::Color colour) const;  //in colour
 #endif
 
-    void prep_serialise() {  //set ptrs to counts
-    }                            //not required
+    // Paint the baseline over pix. If pix has depth of 32, then the line will
+    // be painted in red. Otherwise it will be painted in black.
+    void plot(Pix* pix) const;
 
-    void dump(  //write external bits
-              FILE *f) {
-      serialise_bytes (f, (void *) xcoords, (segments + 1) * sizeof (inT32));
-      serialise_bytes (f, (void *) quadratics, segments * sizeof (QUAD_COEFFS));
-    }
-
-    void de_dump(  //read external bits
-                 FILE *f) {
-      xcoords = (inT32 *) de_serialise_bytes (f,
-        (segments + 1) * sizeof (inT32));
-      quadratics = (QUAD_COEFFS *) de_serialise_bytes (f,
-        segments *
-        sizeof (QUAD_COEFFS));
-    }
-
-                                 //assign copy
-    make_serialise (QSPLINE) QSPLINE & operator= (
+    QSPLINE & operator= (
       const QSPLINE & source);   //from this
 
   private:

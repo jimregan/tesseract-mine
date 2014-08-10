@@ -1,19 +1,48 @@
 SUBDIRS =
-AM_CXXFLAGS = -DTESSDATA_PREFIX=@datadir@/
+AM_CXXFLAGS =
+
+if !NO_TESSDATA_PREFIX
+AM_CXXFLAGS += -DTESSDATA_PREFIX=@datadir@/
+endif
+
+if VISIBILITY
+AM_CXXFLAGS += -fvisibility=hidden -fvisibility-inlines-hidden
+AM_CPPFLAGS += -DTESS_EXPORTS
+endif
 
 include_HEADERS = \
-    basedir.h bits16.h clst.h debugwin.h elst2.h elst.h errcode.h \
-    fileerr.h tessopt.h globaloc.h hashfn.h host.h hosthplb.h lsterr.h \
-    mainblk.h memblk.h memryerr.h memry.h mfcpch.h ndminx.h notdll.h \
-    nwmain.h ocrclass.h ocrshell.h platform.h secname.h serialis.h \
-    stderr.h strngs.h tessclas.h tprintf.h varable.h \
-    mfcpch.cpp scanutils.cpp scanutils.h unichar.h \
-    unicharmap.h unicharset.h boxread.h
+	basedir.h errcode.h fileerr.h genericvector.h helpers.h host.h memry.h \
+	ndminx.h params.h ocrclass.h platform.h serialis.h strngs.h \
+	tesscallback.h unichar.h unicharmap.h unicharset.h
 
-lib_LIBRARIES = libtesseract_ccutil.a
-libtesseract_ccutil_a_SOURCES = \
-    basedir.cpp bits16.cpp clst.cpp debugwin.cpp elst.cpp \
-    elst2.cpp errcode.cpp globaloc.cpp hashfn.cpp mainblk.cpp \
-    memblk.cpp memry.cpp ocrshell.cpp serialis.cpp strngs.cpp \
-    tprintf.cpp varable.cpp unichar.cpp tessopt.cpp \
-    unicharmap.cpp unicharset.cpp boxread.cpp
+noinst_HEADERS = \
+    ambigs.h bits16.h bitvector.h ccutil.h clst.h doubleptr.h elst2.h \
+    elst.h genericheap.h globaloc.h hashfn.h indexmapbidi.h kdpair.h lsterr.h \
+    nwmain.h object_cache.h qrsequence.h secname.h sorthelper.h stderr.h \
+    scanutils.h tessdatamanager.h tprintf.h unicity_table.h unicodes.h \
+    universalambigs.h
+
+if !USING_MULTIPLELIBS
+noinst_LTLIBRARIES = libtesseract_ccutil.la
+else
+lib_LTLIBRARIES = libtesseract_ccutil.la
+libtesseract_ccutil_la_LDFLAGS = -version-info $(GENERIC_LIBRARY_VERSION)
+endif
+
+libtesseract_ccutil_la_SOURCES = \
+    ambigs.cpp basedir.cpp bits16.cpp bitvector.cpp \
+    ccutil.cpp clst.cpp \
+    elst2.cpp elst.cpp errcode.cpp \
+    globaloc.cpp indexmapbidi.cpp \
+    mainblk.cpp memry.cpp \
+    serialis.cpp strngs.cpp scanutils.cpp \
+    tessdatamanager.cpp tprintf.cpp \
+    unichar.cpp unicharmap.cpp unicharset.cpp unicodes.cpp \
+    params.cpp universalambigs.cpp
+
+
+if MINGW
+AM_CPPFLAGS += -I$(top_srcdir)/vs2008/port -DWINDLLNAME=\"lib@GENERIC_LIBRARY_NAME@\"
+noinst_HEADERS += ../vs2010/port/strtok_r.h
+libtesseract_ccutil_la_SOURCES += ../vs2010/port/strtok_r.cpp
+endif

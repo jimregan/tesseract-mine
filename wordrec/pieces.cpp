@@ -25,238 +25,24 @@
 /*----------------------------------------------------------------------
           I n c l u d e s
 ----------------------------------------------------------------------*/
-#include "pieces.h"
-#include "plotseg.h"
-#include "hideedge.h"
-#include "wordclass.h"
-#include "freelist.h"
+
 #include "blobs.h"
-#include "matchtab.h"
+#include "freelist.h"
+#include "helpers.h"
+#include "matrix.h"
+#include "ndminx.h"
+#include "ratngs.h"
+#include "seam.h"
+#include "wordrec.h"
 
-/*----------------------------------------------------------------------
-          M a c r o s
-----------------------------------------------------------------------*/
-/**********************************************************************
- * set_bounds_entry
- *
- * Set the value of the entry in an array of bounds elements.
- **********************************************************************/
-
-#define set_bounds_entry(array,index,top_left,bot_right)  \
-((array)[index].topleft  = (top_left),                  \
-(array)[index].botright = (bot_right))                 \
-
-
-/**********************************************************************
- * get_bounds_entry
- *
- * Get the value of the entry in an array of bounds elements.
- **********************************************************************/
-
-#define get_bounds_entry(array,index,top_left,bot_right)  \
-((top_left)  = (array)[index].topleft,                  \
-(bot_right) = (array)[index].botright)                 \
-
+// Include automatically generated configuration file if running autoconf.
+#ifdef HAVE_CONFIG_H
+#include "config_auto.h"
+#endif
 
 /*----------------------------------------------------------------------
           F u n c t i o n s
 ----------------------------------------------------------------------*/
-/**********************************************************************
- * break_pieces
- *
- * Break up the blobs in this chain so that they are all independent.
- * This operation should undo the affect of join_pieces.
- **********************************************************************/
-void break_pieces(TBLOB *blobs, SEAMS seams, inT16 start, inT16 end) {
-  TESSLINE *outline = blobs->outlines;
-  TBLOB *next_blob;
-  inT16 x;
-
-  for (x = start; x < end; x++)
-    reveal_seam ((SEAM *) array_value (seams, x));
-
-  next_blob = blobs->next;
-
-  while (outline && next_blob) {
-    if (outline->next == next_blob->outlines) {
-      outline->next = NULL;
-      outline = next_blob->outlines;
-      next_blob = next_blob->next;
-    }
-    else {
-      outline = outline->next;
-    }
-  }
-}
-
-
-/**********************************************************************
- * join_pieces
- *
- * Join a group of base level pieces into a single blob that can then
- * be classified.
- **********************************************************************/
-void join_pieces(TBLOB *piece_blobs, SEAMS seams, inT16 start, inT16 end) {
-  TBLOB *next_blob;
-  TBLOB *blob;
-  inT16 x;
-  TESSLINE *outline;
-  SEAM *seam;
-
-  for (x = 0, blob = piece_blobs; x < start; x++)
-    blob = blob->next;
-  next_blob = blob->next;
-  outline = blob->outlines;
-  if (!outline)
-    return;
-
-  while (x < end) {
-    seam = (SEAM *) array_value (seams, x);
-    if (x - seam->widthn >= start && x + seam->widthp < end)
-      hide_seam(seam);
-    while (outline->next)
-      outline = outline->next;
-    outline->next = next_blob->outlines;
-    next_blob = next_blob->next;
-
-    x++;
-  }
-}
-
-
-/**********************************************************************
- * hide_seam
- *
- * Change the edge points that are referenced by this seam to make
- * them hidden edges.
- **********************************************************************/
-void hide_seam(SEAM *seam) {
-  if (seam == NULL || seam->split1 == NULL)
-    return;
-  hide_edge_pair (seam->split1->point1, seam->split1->point2);
-
-  if (seam->split2 == NULL)
-    return;
-  hide_edge_pair (seam->split2->point1, seam->split2->point2);
-
-  if (seam->split3 == NULL)
-    return;
-  hide_edge_pair (seam->split3->point1, seam->split3->point2);
-}
-
-
-/**********************************************************************
- * hide_edge_pair
- *
- * Change the edge points that are referenced by this seam to make
- * them hidden edges.
- **********************************************************************/
-void hide_edge_pair(EDGEPT *pt1, EDGEPT *pt2) {
-  EDGEPT *edgept;
-
-  edgept = pt1;
-  do {
-    hide_edge(edgept);
-    edgept = edgept->next;
-  }
-  while (!exact_point (edgept, pt2) && edgept != pt1);
-  if (edgept == pt1) {
-    /*              cprintf("Hid entire outline at (%d,%d)!!\n",
-       edgept->pos.x,edgept->pos.y);                                */
-  }
-  edgept = pt2;
-  do {
-    hide_edge(edgept);
-    edgept = edgept->next;
-  }
-  while (!exact_point (edgept, pt1) && edgept != pt2);
-  if (edgept == pt2) {
-    /*              cprintf("Hid entire outline at (%d,%d)!!\n",
-       edgept->pos.x,edgept->pos.y);                                */
-  }
-}
-
-
-/**********************************************************************
- * reveal_seam
- *
- * Change the edge points that are referenced by this seam to make
- * them hidden edges.
- **********************************************************************/
-void reveal_seam(SEAM *seam) {
-  if (seam == NULL || seam->split1 == NULL)
-    return;
-  reveal_edge_pair (seam->split1->point1, seam->split1->point2);
-
-  if (seam->split2 == NULL)
-    return;
-  reveal_edge_pair (seam->split2->point1, seam->split2->point2);
-
-  if (seam->split3 == NULL)
-    return;
-  reveal_edge_pair (seam->split3->point1, seam->split3->point2);
-}
-
-
-/**********************************************************************
- * reveal_edge_pair
- *
- * Change the edge points that are referenced by this seam to make
- * them hidden edges.
- **********************************************************************/
-void reveal_edge_pair(EDGEPT *pt1, EDGEPT *pt2) {
-  EDGEPT *edgept;
-
-  edgept = pt1;
-  do {
-    reveal_edge(edgept);
-    edgept = edgept->next;
-  }
-  while (!exact_point (edgept, pt2) && edgept != pt1);
-  if (edgept == pt1) {
-    /*              cprintf("Hid entire outline at (%d,%d)!!\n",
-       edgept->pos.x,edgept->pos.y);                                */
-  }
-  edgept = pt2;
-  do {
-    reveal_edge(edgept);
-    edgept = edgept->next;
-  }
-  while (!exact_point (edgept, pt1) && edgept != pt2);
-  if (edgept == pt2) {
-    /*              cprintf("Hid entire outline at (%d,%d)!!\n",
-       edgept->pos.x,edgept->pos.y);                                */
-  }
-}
-
-
-/**********************************************************************
- * bounds_of_piece
- *
- * Find the bounds of the piece that will be created by joining the
- * requested collection of pieces together.
- **********************************************************************/
-void bounds_of_piece(BOUNDS_LIST bounds,
-                     inT16 start,
-                     inT16 end,
-                     TPOINT *extreme_tl,
-                     TPOINT *extreme_br) {
-  TPOINT topleft;
-  TPOINT botright;
-  inT16 x;
-
-  get_bounds_entry(bounds, start, *extreme_tl, *extreme_br);
-
-  for (x = start + 1; x <= end; x++) {
-    get_bounds_entry(bounds, x, topleft, botright);
-
-    extreme_tl->x = min (topleft.x, extreme_tl->x);
-    extreme_tl->y = max (topleft.y, extreme_tl->y);
-    extreme_br->x = max (botright.x, extreme_br->x);
-    extreme_br->y = min (botright.y, extreme_br->y);
-  }
-}
-
 
 /**********************************************************************
  * classify_piece
@@ -265,146 +51,278 @@ void bounds_of_piece(BOUNDS_LIST bounds,
  * it and return the results.  Take the large piece apart to leave
  * the collection of small pieces un modified.
  **********************************************************************/
-CHOICES classify_piece(TBLOB *pieces,
-                       SEAMS seams,
-                       inT16 start,
-                       inT16 end,
-                       inT32 fx,
-                       STATE *this_state,
-                       STATE *best_state,
-                       inT32 pass,
-                       inT32 blob_index) {
-  STATE current_state;
-  CHOICES choices;
-  TBLOB *pblob;
-  TBLOB *blob;
-  TBLOB *nblob;
-  inT16 x;
-  SEARCH_STATE chunk_groups;
-
-  set_n_ones (&current_state, array_count (seams));
-
-  join_pieces(pieces, seams, start, end);
-  for (blob = pieces, pblob = NULL, x = 0; x < start; x++) {
-    pblob = blob;
-    blob = blob->next;
+namespace tesseract {
+BLOB_CHOICE_LIST *Wordrec::classify_piece(const GenericVector<SEAM*>& seams,
+                                          inT16 start,
+                                          inT16 end,
+                                          const char* description,
+                                          TWERD *word,
+                                          BlamerBundle *blamer_bundle) {
+  if (end > start) join_pieces(seams, start, end, word);
+  BLOB_CHOICE_LIST *choices = classify_blob(word->blobs[start], description,
+                                            White, blamer_bundle);
+  // Set the matrix_cell_ entries in all the BLOB_CHOICES.
+  BLOB_CHOICE_IT bc_it(choices);
+  for (bc_it.mark_cycle_pt(); !bc_it.cycled_list(); bc_it.forward()) {
+    bc_it.data()->set_matrix_cell(start, end);
   }
-  for (nblob = blob->next; x < end; x++)
-    nblob = nblob->next;
-  choices = classify_blob (pblob, blob, nblob, NULL, fx, "pieces:", White,
-    this_state, best_state, pass, blob_index);
 
-  break_pieces(blob, seams, start, end);
-#ifndef GRAPHICS_DISABLED
-  if (display_segmentations > 2) {
-    chunk_groups = bin_to_chunks (&current_state, array_count (seams));
-    display_segmentation(pieces, chunk_groups);
-    window_wait(segm_window);
-    memfree(chunk_groups);
-  }
-#endif
+  if (end > start) break_pieces(seams, start, end, word);
 
   return (choices);
 }
 
+template<class BLOB_CHOICE>
+int SortByUnicharID(const void *void1, const void *void2) {
+  const BLOB_CHOICE *p1 = *reinterpret_cast<const BLOB_CHOICE * const *>(void1);
+  const BLOB_CHOICE *p2 = *reinterpret_cast<const BLOB_CHOICE * const *>(void2);
 
-/**********************************************************************
- * get_piece_rating
- *
- * Check to see if this piece has already been classified.  If it has
- * return that rating.  Otherwise build the piece from the smaller
- * pieces, classify it, store the rating for later, and take the piece
- * apart again.
- **********************************************************************/
-CHOICES get_piece_rating(MATRIX ratings,
-                         TBLOB *blobs,
-                         SEAMS seams,
-                         inT16 start,
-                         inT16 end,
-                         inT32 fx,
-                         STATE *this_state,
-                         STATE *best_state,
-                         inT32 pass,
-                         inT32 blob_index) {
-  CHOICES choices;
+  return p1->unichar_id() - p2->unichar_id();
+}
 
-  choices = matrix_get (ratings, start, end);
-  if (choices == NOT_CLASSIFIED) {
-    choices =
-      classify_piece(blobs,
-                     seams,
-                     start,
-                     end,
-                     fx,
-                     this_state,
-                     best_state,
-                     pass,
-                     blob_index);
-    matrix_put(ratings, start, end, choices);
-  }
-  return (choices);
+template<class BLOB_CHOICE>
+int SortByRating(const void *void1, const void *void2) {
+  const BLOB_CHOICE *p1 = *reinterpret_cast<const BLOB_CHOICE * const *>(void1);
+  const BLOB_CHOICE *p2 = *reinterpret_cast<const BLOB_CHOICE * const *>(void2);
+
+  if (p1->rating() < p2->rating())
+    return 1;
+  return -1;
 }
 
 
 /**********************************************************************
- * record_blob_bounds
+ * fill_filtered_fragment_list
  *
- * Set up and initialize an array that holds the bounds of a set of
- * blobs.
+ * Filter the fragment list so that the filtered_choices only contain
+ * fragments that are in the correct position. choices is the list
+ * that we are going to filter. fragment_pos is the position in the
+ * fragment that we are looking for and num_frag_parts is the the
+ * total number of pieces. The result will be appended to
+ * filtered_choices.
  **********************************************************************/
-BOUNDS_LIST record_blob_bounds(TBLOB *blobs) {
-  TBLOB *blob;
-  BOUNDS_LIST bounds;
-  TPOINT topleft;
-  TPOINT botright;
-  inT16 x = 0;
+void Wordrec::fill_filtered_fragment_list(BLOB_CHOICE_LIST *choices,
+                                          int fragment_pos,
+                                          int num_frag_parts,
+                                          BLOB_CHOICE_LIST *filtered_choices) {
+  BLOB_CHOICE_IT filtered_choices_it(filtered_choices);
+  BLOB_CHOICE_IT choices_it(choices);
 
-  bounds = (BOUNDS_LIST) memalloc (count_blobs (blobs) * sizeof (BOUNDS));
+  for (choices_it.mark_cycle_pt(); !choices_it.cycled_list();
+       choices_it.forward()) {
+    UNICHAR_ID choice_unichar_id = choices_it.data()->unichar_id();
+    const CHAR_FRAGMENT *frag = unicharset.get_fragment(choice_unichar_id);
 
-  iterate_blobs(blob, blobs) {
-    blob_bounding_box(blob, &topleft, &botright);
-    set_bounds_entry(bounds, x, topleft, botright);
-    x++;
+    if (frag != NULL && frag->get_pos() == fragment_pos &&
+        frag->get_total() == num_frag_parts) {
+      // Recover the unichar_id of the unichar that this fragment is
+      // a part of
+      BLOB_CHOICE *b = new BLOB_CHOICE(*choices_it.data());
+      int original_unichar = unicharset.unichar_to_id(frag->get_unichar());
+      b->set_unichar_id(original_unichar);
+      filtered_choices_it.add_to_end(b);
+    }
   }
-  return (bounds);
+
+  filtered_choices->sort(SortByUnicharID<BLOB_CHOICE>);
 }
 
 
 /**********************************************************************
- * record_piece_ratings
+ * merge_and_put_fragment_lists
  *
- * Save the choices for all the pieces that have been classified into
- * a matrix that can be used to look them up later.  A two dimensional
- * matrix is created.  The indices correspond to the starting and
- * ending initial piece number.
+ * Merge the fragment lists in choice_lists and append it to the
+ * ratings matrix.
  **********************************************************************/
-MATRIX record_piece_ratings(TBLOB *blobs) {
-  BOUNDS_LIST bounds;
-  inT16 num_blobs;
-  inT16 x;
-  inT16 y;
-  TPOINT tp_topleft;
-  TPOINT tp_botright;
-  unsigned int topleft;
-  unsigned int botright;
-  MATRIX ratings;
-  CHOICES choices;
+void Wordrec::merge_and_put_fragment_lists(inT16 row, inT16 column,
+                                           inT16 num_frag_parts,
+                                           BLOB_CHOICE_LIST *choice_lists,
+                                           MATRIX *ratings) {
+  BLOB_CHOICE_IT *choice_lists_it = new BLOB_CHOICE_IT[num_frag_parts];
 
-  bounds = record_blob_bounds (blobs);
-  num_blobs = count_blobs (blobs);
-  ratings = create_matrix (num_blobs);
+  for (int i = 0; i < num_frag_parts; i++) {
+    choice_lists_it[i].set_to_list(&choice_lists[i]);
+    choice_lists_it[i].mark_cycle_pt();
+  }
 
-  for (x = 0; x < num_blobs; x++) {
-    for (y = x; y < num_blobs; y++) {
-      bounds_of_piece(bounds, x, y, &tp_topleft, &tp_botright);
-      topleft = *(unsigned int *) &tp_topleft;
-      botright = *(unsigned int *) &tp_botright;
-      choices = get_match_by_bounds (topleft, botright);
-      if (choices != NIL) {
-        matrix_put(ratings, x, y, choices);
+  BLOB_CHOICE_LIST *merged_choice = ratings->get(row, column);
+  if (merged_choice == NULL)
+    merged_choice = new BLOB_CHOICE_LIST;
+
+  bool end_of_list = false;
+  BLOB_CHOICE_IT merged_choice_it(merged_choice);
+  while (!end_of_list) {
+    // Find the maximum unichar_id of the current entry the iterators
+    // are pointing at
+    UNICHAR_ID max_unichar_id = choice_lists_it[0].data()->unichar_id();
+    for (int i = 0; i < num_frag_parts; i++) {
+      UNICHAR_ID unichar_id = choice_lists_it[i].data()->unichar_id();
+      if (max_unichar_id < unichar_id) {
+        max_unichar_id = unichar_id;
+      }
+    }
+
+    // Move the each iterators until it gets to an entry that has a
+    // value greater than or equal to max_unichar_id
+    for (int i = 0; i < num_frag_parts; i++) {
+      UNICHAR_ID unichar_id = choice_lists_it[i].data()->unichar_id();
+      while (!choice_lists_it[i].cycled_list() &&
+             unichar_id < max_unichar_id) {
+        choice_lists_it[i].forward();
+        unichar_id = choice_lists_it[i].data()->unichar_id();
+      }
+      if (choice_lists_it[i].cycled_list()) {
+        end_of_list = true;
+        break;
+      }
+    }
+
+    if (end_of_list)
+      break;
+
+    // Checks if the fragments are parts of the same character
+    UNICHAR_ID first_unichar_id = choice_lists_it[0].data()->unichar_id();
+    bool same_unichar = true;
+    for (int i = 1; i < num_frag_parts; i++) {
+      UNICHAR_ID unichar_id = choice_lists_it[i].data()->unichar_id();
+      if (unichar_id != first_unichar_id) {
+        same_unichar = false;
+        break;
+      }
+    }
+
+    if (same_unichar) {
+      // Add the merged character to the result
+      UNICHAR_ID merged_unichar_id = first_unichar_id;
+      inT16 merged_fontinfo_id = choice_lists_it[0].data()->fontinfo_id();
+      inT16 merged_fontinfo_id2 = choice_lists_it[0].data()->fontinfo_id2();
+      float merged_min_xheight = choice_lists_it[0].data()->min_xheight();
+      float merged_max_xheight = choice_lists_it[0].data()->max_xheight();
+      float positive_yshift = 0, negative_yshift = 0;
+      int merged_script_id = choice_lists_it[0].data()->script_id();
+      BlobChoiceClassifier classifier = choice_lists_it[0].data()->classifier();
+
+      float merged_rating = 0, merged_certainty = 0;
+      for (int i = 0; i < num_frag_parts; i++) {
+        float rating = choice_lists_it[i].data()->rating();
+        float certainty = choice_lists_it[i].data()->certainty();
+
+        if (i == 0 || certainty < merged_certainty)
+          merged_certainty = certainty;
+        merged_rating += rating;
+
+        choice_lists_it[i].forward();
+        if (choice_lists_it[i].cycled_list())
+          end_of_list = true;
+        IntersectRange(choice_lists_it[i].data()->min_xheight(),
+                       choice_lists_it[i].data()->max_xheight(),
+                       &merged_min_xheight, &merged_max_xheight);
+        float yshift = choice_lists_it[i].data()->yshift();
+        if (yshift > positive_yshift) positive_yshift = yshift;
+        if (yshift < negative_yshift) negative_yshift = yshift;
+      }
+
+      float merged_yshift = positive_yshift != 0
+          ? (negative_yshift != 0 ? 0 : positive_yshift)
+          : negative_yshift;
+      merged_choice_it.add_to_end(new BLOB_CHOICE(merged_unichar_id,
+                                                  merged_rating,
+                                                  merged_certainty,
+                                                  merged_fontinfo_id,
+                                                  merged_fontinfo_id2,
+                                                  merged_script_id,
+                                                  merged_min_xheight,
+                                                  merged_max_xheight,
+                                                  merged_yshift,
+                                                  classifier));
+    }
+  }
+
+  if (classify_debug_level)
+    print_ratings_list("Merged Fragments", merged_choice,
+                       unicharset);
+
+  if (merged_choice->empty())
+    delete merged_choice;
+  else
+    ratings->put(row, column, merged_choice);
+
+  delete [] choice_lists_it;
+}
+
+
+/**********************************************************************
+ * get_fragment_lists
+ *
+ * Recursively go through the ratings matrix to find lists of fragments
+ * to be merged in the function merge_and_put_fragment_lists.
+ * current_frag is the postion of the piece we are looking for.
+ * current_row is the row in the rating matrix we are currently at.
+ * start is the row we started initially, so that we can know where
+ * to append the results to the matrix. num_frag_parts is the total
+ * number of pieces we are looking for and num_blobs is the size of the
+ * ratings matrix.
+ **********************************************************************/
+void Wordrec::get_fragment_lists(inT16 current_frag, inT16 current_row,
+                                 inT16 start, inT16 num_frag_parts,
+                                 inT16 num_blobs, MATRIX *ratings,
+                                 BLOB_CHOICE_LIST *choice_lists) {
+  if (current_frag == num_frag_parts) {
+    merge_and_put_fragment_lists(start, current_row - 1, num_frag_parts,
+                                 choice_lists, ratings);
+    return;
+  }
+
+  for (inT16 x = current_row; x < num_blobs; x++) {
+    BLOB_CHOICE_LIST *choices = ratings->get(current_row, x);
+    if (choices == NULL)
+      continue;
+
+    fill_filtered_fragment_list(choices, current_frag, num_frag_parts,
+                                &choice_lists[current_frag]);
+    if (!choice_lists[current_frag].empty()) {
+      get_fragment_lists(current_frag + 1, x + 1, start, num_frag_parts,
+                         num_blobs, ratings, choice_lists);
+      choice_lists[current_frag].clear();
+    }
+  }
+}
+
+
+/**********************************************************************
+ * merge_fragments
+ *
+ * Try to merge fragments in the ratings matrix and put the result in
+ * the corresponding row and column
+ **********************************************************************/
+void Wordrec::merge_fragments(MATRIX *ratings, inT16 num_blobs) {
+  BLOB_CHOICE_LIST choice_lists[CHAR_FRAGMENT::kMaxChunks];
+  for (inT16 start = 0; start < num_blobs; start++) {
+    for (int frag_parts = 2; frag_parts <= CHAR_FRAGMENT::kMaxChunks;
+         frag_parts++) {
+      get_fragment_lists(0, start, start, frag_parts, num_blobs,
+                         ratings, choice_lists);
+    }
+  }
+
+  // Delete fragments from the rating matrix
+  for (inT16 x = 0; x < num_blobs; x++) {
+    for (inT16 y = x; y < num_blobs; y++) {
+      BLOB_CHOICE_LIST *choices = ratings->get(x, y);
+      if (choices != NULL) {
+        BLOB_CHOICE_IT choices_it(choices);
+        for (choices_it.mark_cycle_pt(); !choices_it.cycled_list();
+             choices_it.forward()) {
+          UNICHAR_ID choice_unichar_id = choices_it.data()->unichar_id();
+          const CHAR_FRAGMENT *frag =
+              unicharset.get_fragment(choice_unichar_id);
+          if (frag != NULL)
+            delete choices_it.extract();
+        }
       }
     }
   }
-  memfree(bounds);
-  return (ratings);
 }
+
+
+}  // namespace tesseract

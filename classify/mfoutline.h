@@ -21,11 +21,11 @@
 /**----------------------------------------------------------------------------
           Include Files and Type Defines
 ----------------------------------------------------------------------------**/
-#include "general.h"
+#include "blobs.h"
+#include "host.h"
 #include "oldlist.h"
 #include "fpoint.h"
-#include "fxdefs.h"
-#include "baseline.h"
+#include "params.h"
 
 #define NORMAL_X_HEIGHT   (0.5)
 #define NORMAL_BASELINE   (0.0)
@@ -34,19 +34,9 @@ typedef LIST MFOUTLINE;
 
 typedef enum {
   north, south, east, west, northeast, northwest, southeast, southwest
-}
+} DIRECTION;
 
-
-DIRECTION;
-/*
-typedef enum
-{
-False, True
-}
-BOOLEAN;
-*/
-typedef struct
-{
+typedef struct {
   FPOINT Point;
   FLOAT32 Slope;
   unsigned Padding:20;
@@ -54,74 +44,41 @@ typedef struct
   BOOL8 ExtremityMark:TRUE;
   DIRECTION Direction:4;
   DIRECTION PreviousDirection:4;
-}
-
-
-MFEDGEPT;
+} MFEDGEPT;
 
 typedef enum {
   outer, hole
-}
+} OUTLINETYPE;
 
-
-OUTLINETYPE;
-
-typedef struct
-{
+typedef struct {
   FLOAT64 Mx, My;                /* first moment of all outlines */
   FLOAT64 L;                     /* total length of all outlines */
   FLOAT64 x, y;                  /* center of mass of all outlines */
   FLOAT64 Ix, Iy;                /* second moments about center of mass axes */
   FLOAT64 Rx, Ry;                /* radius of gyration about center of mass axes */
-}
-
-
-OUTLINE_STATS;
+} OUTLINE_STATS;
 
 typedef enum {
   baseline, character
-}
-
-
-NORM_METHOD;
-
-/*----------------------------------------------------------------------------
-            Variables
-------------------------------------------------------------------------------*/
-extern int NormMethod;
+} NORM_METHOD;
 
 /**----------------------------------------------------------------------------
           Macros
 ----------------------------------------------------------------------------**/
 #define AverageOf(A,B)    (((A) + (B)) / 2)
 
-/* macro for computing the baseline of a row of text at an x position */
-#define BaselineAt(L,X) (BASELINE_OFFSET)
-
 /* macro for computing the scale factor to use to normalize characters */
-#define ComputeScaleFactor(L)						\
-(NORMAL_X_HEIGHT / ((is_baseline_normalized ())?			\
-				(BASELINE_SCALE):					\
-				((L)->xheight)))
+#define MF_SCALE_FACTOR  (NORMAL_X_HEIGHT / kBlnXHeight)
 
 /* macros for manipulating micro-feature outlines */
-#define DegenerateOutline(O)  (((O) == NIL) || ((O) == rest(O)))
+#define DegenerateOutline(O)  (((O) == NIL_LIST) || ((O) == list_rest(O)))
 #define PointAt(O)    ((MFEDGEPT *) first_node (O))
-#define NextPointAfter(E) (rest (E))
+#define NextPointAfter(E) (list_rest (E))
 #define MakeOutlineCircular(O)  (set_rest (last (O), (O)))
 
 /* macros for manipulating micro-feature outline edge points */
-#define PositionOf(P)   ((P)->Point)
-#define XPositionOf(P)    (PositionOf(P).x)
-#define YPositionOf(P)    (PositionOf(P).y)
-#define DirectionOf(P)    ((P)->Direction)
-#define PreviousDirectionOf(P)  ((P)->PreviousDirection)
 #define ClearMark(P)    ((P)->ExtremityMark = FALSE)
 #define MarkPoint(P)    ((P)->ExtremityMark = TRUE)
-#define IsExtremity(P)    ((P)->ExtremityMark)
-#define NotExtremity(P)   (!IsExtremity(P))
-#define IsVisible(E)    (! IsHidden(E))
-#define IsHidden(E)   ((E)->Hidden)
 
 /**----------------------------------------------------------------------------
           Public Function Prototypes
@@ -136,8 +93,6 @@ LIST ConvertOutlines(TESSLINE *Outline,
                      LIST ConvertedOutlines,
                      OUTLINETYPE OutlineType);
 
-void ComputeOutlineStats(LIST Outlines, OUTLINE_STATS *OutlineStats);
-
 void FilterEdgeNoise(MFOUTLINE Outline, FLOAT32 NoiseSegmentLength);
 
 void FindDirectionChanges(MFOUTLINE Outline,
@@ -148,8 +103,6 @@ void FreeMFOutline(void *agr);  //MFOUTLINE                             Outline)
 
 void FreeOutlines(LIST Outlines);
 
-void InitMFOutlineVars();
-
 void MarkDirectionChanges(MFOUTLINE Outline);
 
 MFEDGEPT *NewEdgePoint();
@@ -157,28 +110,17 @@ MFEDGEPT *NewEdgePoint();
 MFOUTLINE NextExtremity(MFOUTLINE EdgePoint);
 
 void NormalizeOutline(MFOUTLINE Outline,
-                      LINE_STATS *LineStats,
                       FLOAT32 XOrigin);
-
-void NormalizeOutlines(LIST Outlines,
-                       LINE_STATS *LineStats,
-                       FLOAT32 *XScale,
-                       FLOAT32 *YScale);
-
-void SettupBlobConversion(TBLOB *Blob);
-
-void SmearExtremities(MFOUTLINE Outline, FLOAT32 XScale, FLOAT32 YScale);
 
 /*----------------------------------------------------------------------------
           Private Function Prototypes
 -----------------------------------------------------------------------------*/
 void ChangeDirection(MFOUTLINE Start, MFOUTLINE End, DIRECTION Direction);
 
-void CharNormalizeOutline(MFOUTLINE Outline,
-                          FLOAT32 XCenter,
-                          FLOAT32 YCenter,
-                          FLOAT32 XScale,
-                          FLOAT32 YScale);
+// Normalizes the Outline in-place using cn_denorm's local transformation,
+// then converts from the integer feature range [0,255] to the clusterer
+// feature range of [-0.5, 0.5].
+void CharNormalizeOutline(MFOUTLINE Outline, const DENORM& cn_denorm);
 
 void ComputeDirection(MFEDGEPT *Start,
                       MFEDGEPT *Finish,
@@ -197,81 +139,4 @@ void UpdateOutlineStats(register OUTLINE_STATS *OutlineStats,
                         register FLOAT32 y1,
                         register FLOAT32 y2);
 
-/*
-#if defined(__STDC__) || defined(__cplusplus)
-# define _ARGS(s) s
-#else
-# define _ARGS(s) ()
-#endif*/
-
-/* mfoutline.c
-void ComputeBlobCenter
-  _ARGS((BLOB *Blob,
-  TPOINT *BlobCenter));
-
-LIST ConvertBlob
-  _ARGS((BLOB *Blob));
-
-MFOUTLINE ConvertOutline
-  _ARGS((TESSLINE *Outline));
-
-LIST ConvertOutlines
-  _ARGS((TESSLINE *Outline,
-  LIST ConvertedOutlines,
-  OUTLINETYPE OutlineType));
-
-void ComputeOutlineStats
-  _ARGS((LIST Outlines,
-  OUTLINE_STATS *OutlineStats));
-
-void FilterEdgeNoise
-  _ARGS((MFOUTLINE Outline,
-  FLOAT32 NoiseSegmentLength));
-
-void FindDirectionChanges
-  _ARGS((MFOUTLINE Outline,
-  FLOAT32 MinSlope,
-  FLOAT32 MaxSlope));
-
-void FreeMFOutline
-  _ARGS((MFOUTLINE Outline));
-
-void FreeOutlines
-  _ARGS((LIST Outlines));
-
-void InitMFOutlineVars
-  _ARGS((void));
-
-void MarkDirectionChanges
-  _ARGS((MFOUTLINE Outline));
-
-MFEDGEPT *NewEdgePoint
-  _ARGS((void));
-
-MFOUTLINE NextExtremity
-  _ARGS((MFOUTLINE EdgePoint));
-
-void NormalizeOutline
-  _ARGS((MFOUTLINE Outline,
-  LINE_STATS *LineStats,
-  FLOAT32 XOrigin));
-
-void NormalizeOutlines
-  _ARGS((LIST Outlines,
-  LINE_STATS *LineStats));
-
-void SettupBlobConversion
-  _ARGS((BLOB *Blob));
-
-void SmearExtremities
-  _ARGS((MFOUTLINE Outline,
-  FLOAT32 XScale,
-  FLOAT32 YScale));
-
-#undef _ARGS
-*/
-/**----------------------------------------------------------------------------
-        Global Data Definitions and Declarations
-----------------------------------------------------------------------------**/
-extern int NormMethod;           /* normalized method currently selected */
 #endif

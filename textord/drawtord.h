@@ -20,11 +20,10 @@
 #ifndef           DRAWTORD_H
 #define           DRAWTORD_H
 
-#include          "varable.h"
+#include          "params.h"
 #include          "scrollview.h"
 #include          "pitsync1.h"
 #include          "blobbox.h"
-#include          "notdll.h"
 
 #define NO_SMD        "none"
 
@@ -34,17 +33,10 @@ extern STRING_VAR_H (to_debugfile, DEBUG_WIN_NAME, "Name of debugfile");
 extern STRING_VAR_H (to_smdfile, NO_SMD, "Name of SMD file");
 extern ScrollView* to_win;
 extern FILE *to_debug;
-void create_to_win(                //make features win
-                   ICOORD page_tr  //size of page
-                  );
-void close_to_win();  //make features win
+// Creates a static display window for textord, and returns a pointer to it.
+ScrollView* create_to_win(ICOORD page_tr);
+void close_to_win();  // Destroy the textord window.
 void create_todebug_win();  //make gradients win
-void plot_blob_list(                      //make gradients win
-                    ScrollView* win,           //window to draw in
-                    BLOBNBOX_LIST *list,  //blob list
-                    ScrollView::Color body_colour,   //colour to draw
-                    ScrollView::Color child_colour   //colour of child
-                   );
 void plot_box_list(                      //make gradients win
                    ScrollView* win,           //window to draw in
                    BLOBNBOX_LIST *list,  //blob list

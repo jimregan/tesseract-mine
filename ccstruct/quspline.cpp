@@ -1,8 +1,8 @@
 /**********************************************************************
  * File:        quspline.cpp  (Formerly qspline.c)
  * Description: Code for the QSPLINE class.
- * Author:		Ray Smith
- * Created:		Tue Oct 08 17:16:12 BST 1991
+ * Author:	Ray Smith
+ * Created:	Tue Oct 08 17:16:12 BST 1991
  *
  * (C) Copyright 1991, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,10 +17,15 @@
  *
  **********************************************************************/
 
-#include "mfcpch.h"
-#include          "memry.h"
-#include          "quadlsq.h"
-#include          "quspline.h"
+#include "allheaders.h"
+#include "memry.h"
+#include "quadlsq.h"
+#include "quspline.h"
+
+// Include automatically generated configuration file if running autoconf.
+#ifdef HAVE_CONFIG_H
+#include "config_auto.h"
+#endif
 
 #define QSPLINE_PRECISION 16     //no of steps to draw
 
@@ -372,11 +377,49 @@ void QSPLINE::plot(                //draw it
     x = xcoords[segment];
     for (step = 0; step <= QSPLINE_PRECISION; step++) {
       if (segment == 0 && step == 0)
- 	window->SetCursor(x, quadratics[segment].y (x));
+        window->SetCursor(x, quadratics[segment].y (x));
       else
-	window->DrawTo(x, quadratics[segment].y (x));
+        window->DrawTo(x, quadratics[segment].y (x));
       x += increment;
     }
   }
 }
 #endif
+
+void QSPLINE::plot(Pix *pix) const {
+  if (pix == NULL) {
+    return;
+  }
+
+  inT32 segment;  // Index of segment
+  inT16 step;  // Index of poly piece
+  double increment;  // x increment
+  double x;  // x coord
+  double height = static_cast<double>(pixGetHeight(pix));
+  Pta* points = ptaCreate(QSPLINE_PRECISION * segments);
+  const int kLineWidth = 5;
+
+  for (segment = 0; segment < segments; segment++) {
+    increment = static_cast<double>((xcoords[segment + 1] -
+        xcoords[segment])) / QSPLINE_PRECISION;
+    x = xcoords[segment];
+    for (step = 0; step <= QSPLINE_PRECISION; step++) {
+      double y = height - quadratics[segment].y(x);
+      ptaAddPt(points, x, y);
+      x += increment;
+    }
+  }
+
+  switch (pixGetDepth(pix)) {
+    case 1:
+      pixRenderPolyline(pix, points, kLineWidth, L_SET_PIXELS, 1);
+      break;
+    case 32:
+      pixRenderPolylineArb(pix, points, kLineWidth, 255, 0, 0, 1);
+      break;
+    default:
+      pixRenderPolyline(pix, points, kLineWidth, L_CLEAR_PIXELS, 1);
+      break;
+  }
+  ptaDestroy(&points);
+}

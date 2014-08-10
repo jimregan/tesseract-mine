@@ -22,22 +22,20 @@
           Include Files and Type Defines
 ----------------------------------------------------------------------------**/
 #include "ocrfeatures.h"
-#include "tessclas.h"
-#include "fxdefs.h"
+#include "blobs.h"
 
 typedef enum {
   MFXPosition, MFYPosition,
-  MFLength, MFDirection, MFBulge1, MFBulge2
+  MFLength, MFDirection, MFBulge1, MFBulge2,
+  MFCount  // For array sizes.
 } MF_PARAM_NAME;
+
+typedef float MicroFeature[MFCount];
 /*----------------------------------------------------------------------------
           Private Function Prototypes
 -----------------------------------------------------------------------------*/
-FEATURE_SET ExtractMicros(TBLOB *Blob, LINE_STATS *LineStats); 
+FEATURE_SET ExtractMicros(TBLOB *Blob, const DENORM& bl_denorm,
+                          const DENORM& cn_denorm,
+                          const INT_FX_RESULT_STRUCT& fx_info);
 
-void InitMicroFXVars(); 
-
-/**----------------------------------------------------------------------------
-        Global Data Definitions and Declarations
-----------------------------------------------------------------------------**/
-extern FEATURE_DESC_STRUCT MicroFeatureDesc;
 #endif

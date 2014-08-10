@@ -23,32 +23,8 @@
 #include          <stdlib.h>
 #include          <string.h>
 #include          <stdio.h>
-#include "memry.h"
-#include "errcode.h"
-#include "fileerr.h"
 
-/* **************************************************************************
-
-These are the only routines that write/read data to/from the serialisation.
-
-"serialise_bytes" and "de_serialise_bytes" are used to serialise NON class
-items.  The "make_serialise" macro generates "serialise" and "de_serialise"
-member functions for the class name specified in the macro parameter.
-
-************************************************************************** */
-
-extern DLLSYM void *de_serialise_bytes(FILE *f, int size);
-extern DLLSYM void serialise_bytes(FILE *f, void *ptr, int size);
-extern DLLSYM void serialise_INT32(FILE *f, inT32 the_int);
-extern DLLSYM inT32 de_serialise_INT32(FILE *f);
-extern DLLSYM void serialise_FLOAT64(FILE *f, double the_float);
-extern DLLSYM double de_serialise_FLOAT64(FILE *f);
-extern DLLSYM uinT32 reverse32(            //switch endian
-                               uinT32 num  //number to fix
-                              );
-extern DLLSYM uinT16 reverse16(            //switch endian
-                               uinT16 num  //number to fix
-                              );
+#include "genericvector.h"
 
 /***********************************************************************
   QUOTE_IT   MACRO DEFINITION
@@ -58,38 +34,42 @@ Replace <parm> with "<parm>".  <parm> may be an arbitrary number of tokens
 
 #define QUOTE_IT( parm ) #parm
 
-#define make_serialise( CLASSNAME )													\
-																									\
-	NEWDELETE2(CLASSNAME)                                                 \
-																									\
-void						serialise(														\
-	FILE*					f)																	\
-{																								\
-	CLASSNAME*			shallow_copy;													\
-																									\
-	shallow_copy = (CLASSNAME*) alloc_struct( sizeof( *this ) );				\
-		memmove( shallow_copy, this, sizeof( *this ) );								\
-																									\
-	shallow_copy->prep_serialise();													\
-		if (fwrite( (char*) shallow_copy, sizeof( *shallow_copy ), 1, f ) != 1)\
-		WRITEFAILED.error( QUOTE_IT( CLASSNAME::serialise ),              \
-									ABORT, NULL );											\
-																									\
-	free_struct( shallow_copy, sizeof( *this ) );								\
-		this->dump( f );																			\
-}																								\
-																									\
-	static CLASSNAME*		de_serialise(										\
-	FILE*					f)																	\
-{																								\
-	CLASSNAME*			restored;											\
-																									\
-		restored = (CLASSNAME*) alloc_struct( sizeof( CLASSNAME ) );				\
-		if (fread( (char*) restored, sizeof( CLASSNAME ), 1, f ) != 1)				\
-		READFAILED.error( QUOTE_IT( CLASSNAME::de_serialise ),            \
-									ABORT, NULL );												\
-																									\
-	restored->de_dump( f );																	\
-		return restored;																			\
-}
+namespace tesseract {
+
+// Simple file class. Only does input for now.
+// Allows for portable file input from memory.
+class TFile {
+ public:
+  TFile();
+
+  // All the Open methods load the whole file into memory.
+  // Opens a file with a supplied reader, or NULL to use the default.
+  bool Open(const STRING& filename, FileReader reader);
+  // From an existing memory buffer.
+  bool Open(const char* data, int size);
+  // From an open file and an end offset.
+  bool Open(FILE* fp, inT64 end_offset);
+
+  // Reads a line like fgets. Returns NULL on EOF, otherwise buffer.
+  // Reads at most buffer_size bytes, including '\0' terminator, even if
+  // the line is longer. Does nothing if buffer_size <= 0.
+  char* FGets(char* buffer, int buffer_size);
+  // Replicates fread, returning the number of items read.
+  int FRead(void* buffer, int size, int count);
+  // To use fscanf use FGets and sscanf.
+
+  // Resets the TFile as if it has been Opened, but nothing read.
+  void Rewind() {
+    offset_ = 0;
+  }
+
+ private:
+  // The number of bytes used so far.
+  int offset_;
+  // The buffered data from the file.
+  GenericVector<char> data_;
+};
+
+}  // namespace tesseract.
+
 #endif

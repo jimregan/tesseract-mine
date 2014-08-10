@@ -1,3 +1,3 @@
 datadir = @datadir@/tessdata/configs
-data_DATA = inter makebox box.train unlv api_config kannada
-EXTRA_DIST = inter makebox box.train unlv api_config kannada
+data_DATA = inter makebox box.train unlv ambigs.train api_config kannada box.train.stderr quiet logfile digits hocr linebox pdf rebox strokewidth bigram
+EXTRA_DIST = inter makebox box.train unlv ambigs.train api_config kannada box.train.stderr quiet logfile digits hocr linebox pdf rebox strokewidth bigram

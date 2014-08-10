@@ -17,9 +17,6 @@
  *
  **********************************************************************/
 
-#define BLOB_MATCHING_ON
-
-#include "mfcpch.h"
 #include          "fileerr.h"
 #ifdef __UNIX__
 #include          <unistd.h>
@@ -28,104 +25,68 @@
 #include          <io.h>
 #endif
 #include          <stdlib.h>
-#include          "basedir.h"
-#include          "mainblk.h"
+#include          "ccutil.h"
 
-#define VARDIR        "configs/" /*variables files */
+#define VARDIR        "configs/" /**< variables files */
 #define EXTERN
 
-EXTERN DLLSYM STRING datadir;    //dir for data files
-                                 //name of image
-EXTERN DLLSYM STRING imagebasename;
-EXTERN BOOL_VAR (m_print_variables, FALSE,
-"Print initial values of all variables");
-EXTERN STRING_VAR (m_data_sub_dir, "tessdata/", "Directory for data files");
-EXTERN INT_VAR (memgrab_size, 0, "Preallocation size for batch use");
 const ERRCODE NO_PATH =
 "Warning:explicit path for executable will not be used for configs";
 static const ERRCODE USAGE = "Usage";
 
+namespace tesseract {
 /**********************************************************************
  * main_setup
  *
  * Main for mithras demo program. Read the arguments and set up globals.
  **********************************************************************/
 
-void main_setup(                         /*main demo program */
-                const char *argv0,       //program name
-                const char *basename,    //name of image
-                int argc,                /*argument count */
-                const char *const *argv  /*arguments */
-               ) {
-  inT32 arg;                     /*argument */
-  inT32 offset;                  //for flag
-  FILE *fp;                      /*variables file */
-  char flag[2];                  //+/-
-  STRING varfile;                /*name of file */
+/**
+ * @brief CCUtil::main_setup - set location of tessdata and name of image
+ *
+ * @param argv0 - paths to the directory with language files and config files.
+ * An actual value of argv0 is used if not NULL, otherwise TESSDATA_PREFIX is
+ * used if not NULL, next try to use compiled in -DTESSDATA_PREFIX. If previous
+ * is not sucessul - use current directory.
+ * @param basename - name of image
+ */
+void CCUtil::main_setup(const char *argv0, const char *basename) {
+  imagebasename = basename;      /**< name of image */
 
-  imagebasename = basename;      /*name of image */
-
-  if(!getenv("TESSDATA_PREFIX")) {
-  #ifdef TESSDATA_PREFIX
-  #define _STR(a) #a
-  #define _XSTR(a) _STR(a)
-  datadir = _XSTR(TESSDATA_PREFIX);
-  #undef _XSTR
-  #undef _STR
-  #else
-  if (getpath (argv0, datadir) < 0)
-  #ifdef __UNIX__
-    CANTOPENFILE.error ("main", ABORT, "%s to get path", argv[0]);
-  #else
-  NO_PATH.error ("main", DBG, NULL);
-  #endif
-  #endif
+  if (argv0 != NULL) {
+    datadir = argv0;
   } else {
-    datadir = getenv("TESSDATA_PREFIX");
+    if (getenv("TESSDATA_PREFIX")) {
+      datadir = getenv("TESSDATA_PREFIX");
+    } else {
+#ifdef TESSDATA_PREFIX
+#define _STR(a) #a
+#define _XSTR(a) _STR(a)
+    datadir = _XSTR(TESSDATA_PREFIX);
+#undef _XSTR
+#undef _STR
+#endif
+    }
   }
 
-  for (arg = 0; arg < argc; arg++) {
-    if (argv[arg][0] == '+' || argv[arg][0] == '-') {
-      offset = 1;
-      flag[0] = argv[arg][0];
-    }
-    else {
-      offset = 0;
-    }
-    flag[offset] = '\0';
-    varfile = flag;
-                                 /*attempt open */
-    fp = fopen (argv[arg] + offset, "r");
-    if (fp != NULL) {
-      fclose(fp);  /*was only to test */
-    }
-    else {
-      varfile += datadir;
-      varfile += m_data_sub_dir; /*data directory */
-      varfile += VARDIR;         /*variables dir */
-    }
-                                 /*actual name */
-    varfile += argv[arg] + offset;
-    read_variables_file (varfile.string ());
+  // datadir may still be empty:
+  if (datadir.length() == 0) {
+    datadir = "./";
+  } else {
+    // Remove tessdata from the end if present, as we will add it back!
+    int length = datadir.length();
+    if (length >= 8 && strcmp(&datadir[length - 8], "tessdata") == 0)
+      datadir.truncate_at(length - 8);
+    else if (length >= 9 && strcmp(&datadir[length - 9], "tessdata/") == 0)
+      datadir.truncate_at(length - 9);
   }
 
-  if (m_print_variables)
-    print_variables(stdout);  /*print them all */
+  // check for missing directory separator
+  const char *lastchar = datadir.string();
+  lastchar += datadir.length() - 1;
+  if ((strcmp(lastchar, "/") != 0) && (strcmp(lastchar, "\\") != 0))
+    datadir += "/";
 
-
-  datadir += m_data_sub_dir;     /*data directory */
-
-  #ifdef __UNIX__
-  if (memgrab_size > 0) {
-    void *membuf;                //test virtual mem
-                                 //test memory
-    membuf = malloc (memgrab_size);
-    if (membuf == NULL) {
-      raise(SIGTTOU);  //hangup for jobber
-      sleep (10);
-    }
-    else
-      free(membuf);
-  }
-  #endif
+  datadir += m_data_sub_dir;     /**< data directory */
 }
+}  // namespace tesseract

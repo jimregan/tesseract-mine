@@ -77,12 +77,6 @@ class DLLSYM ELIST2_LINK
     const ELIST2_LINK &) {
       prev = next = NULL;
     }
-
-    /* NOTE that none of the serialise member functions are required for
-    ELIST2_LINKs as they are never serialised.  (We demand that the derived
-    class terminates recursion - just to make sure that it defines the member
-    functions anyway.)
-    */
 };
 
 /**********************************************************************
@@ -110,12 +104,12 @@ class DLLSYM ELIST2
       void (*zapper) (ELIST2_LINK *));
     //ptr to zapper functn
 
-    BOOL8 empty() {  //is list empty?
+    bool empty() const {  //is list empty?
       return !last;
     }
 
-    BOOL8 singleton() {
-      return last ? (last == last->next) : FALSE;
+    bool singleton() const {
+      return last ? (last == last->next) : false;
     }
 
     void shallow_copy(                      //dangerous!!
@@ -131,30 +125,20 @@ class DLLSYM ELIST2
                            ELIST2_ITERATOR *start_it,  //from list start
                            ELIST2_ITERATOR *end_it);   //from list end
 
-    inT32 length();  //# elements in list
+    inT32 length() const;  // # elements in list
 
     void sort (                  //sort elements
       int comparator (           //comparison routine
       const void *, const void *));
 
-    void internal_dump (         //serialise each elem
-      FILE * f,                  //to this file
-      void element_serialiser (  //using this function
-      FILE *, ELIST2_LINK *));
+    // Assuming list has been sorted already, insert new_link to
+    // keep the list sorted according to the same comparison function.
+    // Comparision function is the same as used by sort, i.e. uses double
+    // indirection. Time is O(1) to add to beginning or end.
+    // Time is linear to add pre-sorted items to an empty list.
+    void add_sorted(int comparator(const void*, const void*),
+                    ELIST2_LINK* new_link);
 
-    void internal_de_dump (      //de_serial each elem
-      FILE * f,                  //from this file
-                                 //using this function
-      ELIST2_LINK * element_de_serialiser (
-      FILE *));
-
-    void prep_serialise();  //change last to count
-
-    /*  Note that dump() and de_dump() are not required as calls to dump/de_dump a
-      list class should be handled by a class derived from this.
-
-      make_serialise is not required for a similar reason.
-    */
 };
 
 /***********************************************************************
@@ -213,7 +197,7 @@ class DLLSYM ELIST2_ITERATOR
                          ELIST2 *list_to_add);  //move to it 1st item
 
     ELIST2_LINK *data() {  //get current data
-    #ifdef _DEBUG
+    #ifndef NDEBUG
       if (!current)
         NULL_DATA.error ("ELIST2_ITERATOR::data", ABORT, NULL);
       if (!list)
@@ -239,7 +223,7 @@ class DLLSYM ELIST2_ITERATOR
     void mark_cycle_pt();  //remember current
 
     BOOL8 empty() {  //is list empty?
-    #ifdef _DEBUG
+    #ifndef NDEBUG
       if (!list)
         NO_LIST.error ("ELIST2_ITERATOR::empty", ABORT, NULL);
     #endif
@@ -279,7 +263,7 @@ class DLLSYM ELIST2_ITERATOR
 
 inline void ELIST2_ITERATOR::set_to_list(  //change list
                                          ELIST2 *list_to_iterate) {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST2_ITERATOR::set_to_list", ABORT, NULL);
   if (!list_to_iterate)
@@ -318,7 +302,7 @@ inline ELIST2_ITERATOR::ELIST2_ITERATOR(ELIST2 *list_to_iterate) {
 
 inline void ELIST2_ITERATOR::add_after_then_move(  // element to add
                                                  ELIST2_LINK *new_element) {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST2_ITERATOR::add_after_then_move", ABORT, NULL);
   if (!list)
@@ -369,7 +353,7 @@ inline void ELIST2_ITERATOR::add_after_then_move(  // element to add
 
 inline void ELIST2_ITERATOR::add_after_stay_put(  // element to add
                                                 ELIST2_LINK *new_element) {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST2_ITERATOR::add_after_stay_put", ABORT, NULL);
   if (!list)
@@ -423,7 +407,7 @@ inline void ELIST2_ITERATOR::add_after_stay_put(  // element to add
 
 inline void ELIST2_ITERATOR::add_before_then_move(  // element to add
                                                   ELIST2_LINK *new_element) {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST2_ITERATOR::add_before_then_move", ABORT, NULL);
   if (!list)
@@ -472,7 +456,7 @@ inline void ELIST2_ITERATOR::add_before_then_move(  // element to add
 
 inline void ELIST2_ITERATOR::add_before_stay_put(  // element to add
                                                  ELIST2_LINK *new_element) {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST2_ITERATOR::add_before_stay_put", ABORT, NULL);
   if (!list)
@@ -521,7 +505,7 @@ inline void ELIST2_ITERATOR::add_before_stay_put(  // element to add
  **********************************************************************/
 
 inline void ELIST2_ITERATOR::add_list_after(ELIST2 *list_to_add) {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST2_ITERATOR::add_list_after", ABORT, NULL);
   if (!list)
@@ -575,7 +559,7 @@ inline void ELIST2_ITERATOR::add_list_after(ELIST2 *list_to_add) {
  **********************************************************************/
 
 inline void ELIST2_ITERATOR::add_list_before(ELIST2 *list_to_add) {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST2_ITERATOR::add_list_before", ABORT, NULL);
   if (!list)
@@ -629,7 +613,7 @@ inline void ELIST2_ITERATOR::add_list_before(ELIST2 *list_to_add) {
 inline ELIST2_LINK *ELIST2_ITERATOR::extract() {
   ELIST2_LINK *extracted_link;
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST2_ITERATOR::extract", ABORT, NULL);
   if (!list)
@@ -640,24 +624,22 @@ inline ELIST2_LINK *ELIST2_ITERATOR::extract() {
       ABORT, NULL);
   #endif
 
-  if (list->singleton ())        //special case where
-                                 //we do need to
+  if (list->singleton()) {
+    // Special case where we do need to change the iterator.
     prev = next = list->last = NULL;
-  //change the iterator
-  else {
+  } else {
     prev->next = next;           //remove from list
     next->prev = prev;
 
     if (current == list->last) {
       list->last = prev;
       ex_current_was_last = TRUE;
-    }
-    else
+    } else {
       ex_current_was_last = FALSE;
-
-    ex_current_was_cycle_pt = (current == cycle_pt) ? TRUE : FALSE;
-
+    }
   }
+  // Always set ex_current_was_cycle_pt so an add/forward will work in a loop.
+  ex_current_was_cycle_pt = (current == cycle_pt) ? TRUE : FALSE;
   extracted_link = current;
   extracted_link->next = NULL;   //for safety
   extracted_link->prev = NULL;   //for safety
@@ -674,7 +656,7 @@ inline ELIST2_LINK *ELIST2_ITERATOR::extract() {
  **********************************************************************/
 
 inline ELIST2_LINK *ELIST2_ITERATOR::move_to_first() {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST2_ITERATOR::move_to_first", ABORT, NULL);
   if (!list)
@@ -696,7 +678,7 @@ inline ELIST2_LINK *ELIST2_ITERATOR::move_to_first() {
  **********************************************************************/
 
 inline ELIST2_LINK *ELIST2_ITERATOR::move_to_last() {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST2_ITERATOR::move_to_last", ABORT, NULL);
   if (!list)
@@ -722,7 +704,7 @@ inline ELIST2_LINK *ELIST2_ITERATOR::move_to_last() {
  **********************************************************************/
 
 inline void ELIST2_ITERATOR::mark_cycle_pt() {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST2_ITERATOR::mark_cycle_pt", ABORT, NULL);
   if (!list)
@@ -745,7 +727,7 @@ inline void ELIST2_ITERATOR::mark_cycle_pt() {
  **********************************************************************/
 
 inline BOOL8 ELIST2_ITERATOR::at_first() {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST2_ITERATOR::at_first", ABORT, NULL);
   if (!list)
@@ -767,7 +749,7 @@ inline BOOL8 ELIST2_ITERATOR::at_first() {
  **********************************************************************/
 
 inline BOOL8 ELIST2_ITERATOR::at_last() {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST2_ITERATOR::at_last", ABORT, NULL);
   if (!list)
@@ -789,7 +771,7 @@ inline BOOL8 ELIST2_ITERATOR::at_last() {
  **********************************************************************/
 
 inline BOOL8 ELIST2_ITERATOR::cycled_list() {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST2_ITERATOR::cycled_list", ABORT, NULL);
   if (!list)
@@ -809,7 +791,7 @@ inline BOOL8 ELIST2_ITERATOR::cycled_list() {
  **********************************************************************/
 
 inline inT32 ELIST2_ITERATOR::length() {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST2_ITERATOR::length", ABORT, NULL);
   if (!list)
@@ -831,7 +813,7 @@ inline void
 ELIST2_ITERATOR::sort (          //sort elements
 int comparator (                 //comparison routine
 const void *, const void *)) {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST2_ITERATOR::sort", ABORT, NULL);
   if (!list)
@@ -855,7 +837,7 @@ const void *, const void *)) {
 
 inline void ELIST2_ITERATOR::add_to_end(  // element to add
                                         ELIST2_LINK *new_element) {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST2_ITERATOR::add_to_end", ABORT, NULL);
   if (!list)
@@ -906,10 +888,6 @@ will NOT work correctly for classes derived from this.
 
 The macro generates:
   - An element deletion function:      CLASSNAME##_zapper
-  - An element copier function:
-              CLASSNAME##_copier
-  - An element serialiser function"    CLASSNAME##_serialiser
-  - An element de-serialiser function" CLASSNAME##_de_serialiser
   - An E_LIST2 subclass:	CLASSNAME##_LIST
   - An E_LIST2_ITERATOR subclass:
               CLASSNAME##_IT
@@ -917,30 +895,22 @@ The macro generates:
 NOTE: Generated names are DELIBERATELY designed to clash with those for
 ELISTIZE but NOT with those for CLISTIZE and CLIST2IZE
 
-Four macros are provided: ELIST2IZE, ELIST2IZE_S, ELIST2IZEH and ELIST2IZEH_S
+Two macros are provided: ELIST2IZE and ELIST2IZEH
 The ...IZEH macros just define the class names for use in .h files
 The ...IZE macros define the code use in .c files
-The _S versions define lists which can be serialised.  They assume that
-the make_serialise() macro is used in the list element class derived from
-ELIST2_LINK to define serialise() and de_serialise() members for the list
-elements.
 ***********************************************************************/
 
 /***********************************************************************
-  ELIST2IZEH( CLASSNAME )  and  ELIST2IZEH_S( CLASSNAME ) MACROS
+  ELIST2IZEH( CLASSNAME ) MACRO
 
-These macros are constructed from 3 fragments ELIST2IZEH_A, ELIST2IZEH_B and
-ELIST2IZEH_C.  ELIST2IZEH is simply a concatenation of these parts.
-ELIST2IZEH_S has some additional bits thrown in the gaps.
+ELIST2IZEH is a concatenation of 3 fragments ELIST2IZEH_A, ELIST2IZEH_B and
+ELIST2IZEH_C.
 ***********************************************************************/
 
 #define ELIST2IZEH_A( CLASSNAME )													\
 																										\
 extern DLLSYM void			CLASSNAME##_zapper(			/*delete a link*/		\
-ELIST2_LINK*				link);						/*link to delete*/   \
-																										\
-extern DLLSYM ELIST2_LINK*	CLASSNAME##_copier(			/*deep copy a link*/	\
-ELIST2_LINK*				old_element);   /*source link */
+ELIST2_LINK*				link);						/*link to delete*/
 
 #define ELIST2IZEH_B( CLASSNAME )													\
 																										\
@@ -967,11 +937,11 @@ void						clear()						/* delete elements */\
 																										\
 									~CLASSNAME##_LIST()	/* destructor */		\
 	{ clear(); }																				\
-																										\
-void						deep_copy(					/* become a deep */  \
-	const CLASSNAME##_LIST*	list)						/* copy of src list*/\
-	{ ELIST2::internal_deep_copy( &CLASSNAME##_copier, list ); }				\
-																										\
+\
+/* Become a deep copy of src_list*/ \
+void deep_copy(const CLASSNAME##_LIST* src_list, \
+               CLASSNAME* (*copier)(const CLASSNAME*)); \
+\
 void						operator=(					/* prevent assign */	\
 	const CLASSNAME##_LIST&)																\
 	{ DONT_ASSIGN_LISTS.error( QUOTE_IT( CLASSNAME##_LIST ),						\
@@ -1032,34 +1002,9 @@ ELIST2IZEH_B( CLASSNAME )																		\
 																										\
 ELIST2IZEH_C( CLASSNAME )
 
-#define ELIST2IZEH_S( CLASSNAME )													\
-																										\
-ELIST2IZEH_A( CLASSNAME )																		\
-																										\
-extern DLLSYM void			CLASSNAME##_serialiser(										\
-FILE*						f,																	\
-ELIST2_LINK*				element);														\
-																										\
-extern DLLSYM ELIST2_LINK*	CLASSNAME##_de_serialiser(								\
-FILE*						f);																\
-																										\
-ELIST2IZEH_B( CLASSNAME )																		\
-																										\
-	void					dump(						/* dump to file */   \
-	FILE*					f)																	\
-	{ ELIST2::internal_dump( f, &CLASSNAME##_serialiser );}						\
-																										\
-	void					de_dump(					/* get from file */  \
-	FILE*					f)																	\
-	{ ELIST2::internal_de_dump( f, &CLASSNAME##_de_serialiser );}				\
-																										\
-make_serialise( CLASSNAME##_LIST )													\
-																										\
-ELIST2IZEH_C( CLASSNAME )
 
 /***********************************************************************
-  ELIST2IZE( CLASSNAME )  and   ELIST2IZE_S( CLASSNAME )  MACROS
-ELIST2IZE_S is a simple extension to ELIST2IZE
+  ELIST2IZE( CLASSNAME ) MACRO
 ***********************************************************************/
 
 #define ELIST2IZE( CLASSNAME )                                                \
@@ -1078,60 +1023,16 @@ ELIST2_LINK*				link)						/*link to delete*/	\
 {																										\
 delete (CLASSNAME *) link;																	\
 }																										\
-																										\
-																										\
-																										\
-/***********************************************************************		\
-*							CLASSNAME##_copier																			\
-*																										\
-*  A function which can generate a new, deep copy of a CLASSNAME element.		\
-*  This is passed to the generic deep copy list member function so that when  \
-*  a list is copied the elements on the list are properly copied from the		\
-*  base class, even though we dont use a virtual function.							\
-**********************************************************************/			\
-																										\
-DLLSYM ELIST2_LINK*			CLASSNAME##_copier(			/*deep copy a link*/	\
-ELIST2_LINK*				old_element)				/*source link*/		\
-{																										\
-	CLASSNAME*			new_element;												\
-																										\
-new_element = new CLASSNAME;															\
-*new_element = *((CLASSNAME*) old_element);										\
-return (ELIST2_LINK*) new_element;														\
+\
+/* Become a deep copy of src_list*/ \
+void CLASSNAME##_LIST::deep_copy(const CLASSNAME##_LIST* src_list, \
+               CLASSNAME* (*copier)(const CLASSNAME*)) { \
+\
+  CLASSNAME##_IT from_it(const_cast<CLASSNAME##_LIST*>(src_list)); \
+  CLASSNAME##_IT to_it(this); \
+\
+  for (from_it.mark_cycle_pt(); !from_it.cycled_list(); from_it.forward()) \
+    to_it.add_after_then_move((*copier)(from_it.data())); \
 }
 
-#define ELIST2IZE_S( CLASSNAME )														\
-																										\
-ELIST2IZE( CLASSNAME )																			\
-																										\
-/***********************************************************************		\
-*							CLASSNAME##_serialiser																			\
-*																										\
-*  A function which can serialise an element												\
-*  This is passed to the generic dump member function so that when a list is  \
-*  serialised the elements on the list are properly serialised.					\
-**********************************************************************/			\
-																										\
-DLLSYM void					CLASSNAME##_serialiser(										\
-FILE*						f,																	\
-ELIST2_LINK*				element)														\
-{																										\
-((CLASSNAME*) element)->serialise( f );													\
-}																										\
-																										\
-																										\
-																										\
-/***********************************************************************		\
-*							CLASSNAME##_de_serialiser																		\
-*																										\
-*  A function which can de-serialise an element											\
-*  This is passed to the generic de-dump member function so that when a list  \
-*  is de-serialised the elements on the list are properly de-serialised.		\
-**********************************************************************/			\
-																										\
-DLLSYM ELIST2_LINK*			CLASSNAME##_de_serialiser(								\
-FILE*						f)																	\
-{																										\
-return (ELIST2_LINK*) CLASSNAME::de_serialise( f );								\
-}
 #endif

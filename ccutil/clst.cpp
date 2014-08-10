@@ -17,7 +17,6 @@
  *
  **********************************************************************/
 
-#include          "mfcpch.h"     //precompiled headers
 #include <stdlib.h>
 #include "clst.h"
 
@@ -44,7 +43,7 @@ void (*zapper) (void *)) {       //ptr to zapper functn
   CLIST_LINK *ptr;
   CLIST_LINK *next;
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST::internal_deep_clear", ABORT, NULL);
   #endif
@@ -76,7 +75,7 @@ void CLIST::shallow_clear() {  //destroy all links
   CLIST_LINK *ptr;
   CLIST_LINK *next;
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST::shallow_clear", ABORT, NULL);
   #endif
@@ -92,36 +91,6 @@ void CLIST::shallow_clear() {  //destroy all links
     }
   }
 }
-
-
-/***********************************************************************
- *							CLIST::internal_deep_copy
- *
- *  Used during explict deep copy of a list.  The "copier" function passed
- *  allows each element to be correctly deep copied (assuming that each class
- *  in the inheritance hierarchy does properly deep copies its members).  The
- *  function passing technique is as for "internal_clear".
- **********************************************************************/
-
-void
-                                 //ptr to copier functn
-CLIST::internal_deep_copy (void *(*copier) (void *),
-const CLIST * list) {            //list being copied
-  CLIST_ITERATOR from_it ((CLIST *) list);
-  CLIST_ITERATOR to_it(this);
-
-  #ifdef _DEBUG
-  if (!this)
-    NULL_OBJECT.error ("CLIST::internal_deep_copy", ABORT, NULL);
-  if (!list)
-    BAD_PARAMETER.error ("CLIST::internal_deep_copy", ABORT,
-      "source list is NULL");
-  #endif
-
-  for (from_it.mark_cycle_pt (); !from_it.cycled_list (); from_it.forward ())
-    to_it.add_after_then_move (copier (from_it.data ()));
-}
-
 
 /***********************************************************************
  *							CLIST::assign_to_sublist
@@ -142,7 +111,7 @@ void CLIST::assign_to_sublist(                           //to this list
   const ERRCODE LIST_NOT_EMPTY =
     "Destination list must be empty before extracting a sublist";
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST::assign_to_sublist", ABORT, NULL);
   #endif
@@ -160,16 +129,16 @@ void CLIST::assign_to_sublist(                           //to this list
  *  Return count of elements on list
  **********************************************************************/
 
-inT32 CLIST::length() {  //count elements
-  CLIST_ITERATOR it(this);
+inT32 CLIST::length() const {  //count elements
+  CLIST_ITERATOR it(const_cast<CLIST*>(this));
   inT32 count = 0;
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST::length", ABORT, NULL);
   #endif
 
-  for (it.mark_cycle_pt (); !it.cycled_list (); it.forward ())
+  for (it.mark_cycle_pt(); !it.cycled_list(); it.forward())
     count++;
   return count;
 }
@@ -191,7 +160,7 @@ const void *, const void *)) {
   void **current;
   inT32 i;
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST::sort", ABORT, NULL);
   #endif
@@ -219,82 +188,73 @@ const void *, const void *)) {
   free(base);
 }
 
-
-/***********************************************************************
- *							CLIST::prep_serialise
- *
- *  Replace the last member with a count of elements for serialisation.
- *  This is used on list objects which are members of objects being
- *  serialised.  The containing object has been shallow copied and this member
- *  function is invoked on the COPY.
- **********************************************************************/
-
-void CLIST::prep_serialise() {
-  CLIST_ITERATOR this_it(this);
-  inT32 count = 0;
-
-  #ifdef _DEBUG
-  if (!this)
-    NULL_OBJECT.error ("CLIST::prep_serialise", ABORT, NULL);
-  #endif
-
-  count = 0;
-  if (!empty ())
-    for (this_it.mark_cycle_pt ();
-    !this_it.cycled_list (); this_it.forward ())
-  count++;
-  last = (CLIST_LINK *) count;
+// Assuming list has been sorted already, insert new_data to
+// keep the list sorted according to the same comparison function.
+// Comparision function is the same as used by sort, i.e. uses double
+// indirection. Time is O(1) to add to beginning or end.
+// Time is linear to add pre-sorted items to an empty list.
+// If unique, then don't add duplicate entries.
+// Returns true if the element was added to the list.
+bool CLIST::add_sorted(int comparator(const void*, const void*),
+                       bool unique, void* new_data) {
+  // Check for adding at the end.
+  if (last == NULL || comparator(&last->data, &new_data) < 0) {
+    CLIST_LINK* new_element = new CLIST_LINK;
+    new_element->data = new_data;
+    if (last == NULL) {
+      new_element->next = new_element;
+    } else {
+      new_element->next = last->next;
+      last->next = new_element;
+    }
+    last = new_element;
+    return true;
+  } else if (!unique || last->data != new_data) {
+    // Need to use an iterator.
+    CLIST_ITERATOR it(this);
+    for (it.mark_cycle_pt(); !it.cycled_list(); it.forward()) {
+      void* data = it.data();
+      if (data == new_data && unique)
+        return false;
+      if (comparator(&data, &new_data) > 0)
+        break;
+    }
+    if (it.cycled_list())
+      it.add_to_end(new_data);
+    else
+      it.add_before_then_move(new_data);
+    return true;
+  }
+  return false;
 }
 
-
-/***********************************************************************
- *							CLIST::internal_dump
- *
- *  Cause each element on the list to be serialised by walking the list and
- *  calling the element_serialiser function for each element.  The
- *  element_serialiser simply does the appropriate coercion of the element to
- *  its real type and then invokes the elements serialise function
- **********************************************************************/
-
-void
-CLIST::internal_dump (FILE * f, void element_serialiser (FILE *, void *)) {
-  CLIST_ITERATOR this_it(this);
-
-  #ifdef _DEBUG
-  if (!this)
-    NULL_OBJECT.error ("CLIST::internal_dump", ABORT, NULL);
-  #endif
-
-  if (!empty ())
-    for (this_it.mark_cycle_pt ();
-    !this_it.cycled_list (); this_it.forward ())
-  element_serialiser (f, this_it.data ());
-}
-
-
-/***********************************************************************
- *							CLIST::internal_de_dump
- *
- *  Cause each element on the list to be de_serialised by extracting the count
- *  of elements on the list, (held in the last member of the dumped version of
- *  the list object), and then de-serialising that number of list elements,
- *  adding each to the end of the reconstructed list.
- **********************************************************************/
-
-void
-CLIST::internal_de_dump (FILE * f, void *element_de_serialiser (FILE *)) {
-  inT32 count = (ptrdiff_t) last;
-  CLIST_ITERATOR this_it;
-
-  #ifdef _DEBUG
-  if (!this)
-    NULL_OBJECT.error ("CLIST::internal_de_dump", ABORT, NULL);
-  #endif
-
-  last = NULL;
-  this_it.set_to_list (this);
-  for (; count > 0; count--)
-    this_it.add_to_end (element_de_serialiser (f));
+// Assuming that the minuend and subtrahend are already sorted with
+// the same comparison function, shallow clears this and then copies
+// the set difference minuend - subtrahend to this, being the elements
+// of minuend that do not compare equal to anything in subtrahend.
+// If unique is true, any duplicates in minuend are also eliminated.
+void CLIST::set_subtract(int comparator(const void*, const void*),
+                         bool unique,
+                         CLIST* minuend, CLIST* subtrahend) {
+  shallow_clear();
+  CLIST_ITERATOR m_it(minuend);
+  CLIST_ITERATOR s_it(subtrahend);
+  // Since both lists are sorted, finding the subtras that are not
+  // minus is a case of a parallel iteration.
+  for (m_it.mark_cycle_pt(); !m_it.cycled_list(); m_it.forward()) {
+    void* minu = m_it.data();
+    void* subtra = NULL;
+    if (!s_it.empty()) {
+      subtra = s_it.data();
+      while (!s_it.at_last() &&
+             comparator(&subtra, &minu) < 0) {
+        s_it.forward();
+        subtra = s_it.data();
+      }
+    }
+    if (subtra == NULL || comparator(&subtra, &minu) != 0)
+      add_sorted(comparator, unique, minu);
+  }
 }
 
 
@@ -311,7 +271,7 @@ CLIST::internal_de_dump (FILE * f, void *element_de_serialiser (FILE *)) {
  **********************************************************************/
 
 void *CLIST_ITERATOR::forward() {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST_ITERATOR::forward", ABORT, NULL);
   if (!list)
@@ -324,21 +284,21 @@ void *CLIST_ITERATOR::forward() {
                                  //set previous
     prev = current;
     started_cycling = TRUE;
-  }
-  else {
+    // In case next is deleted by another iterator, get next from current.
+    current = current->next;
+  } else {
     if (ex_current_was_cycle_pt)
       cycle_pt = next;
+    current = next;
   }
-  current = next;
   next = current->next;
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!current)
     NULL_DATA.error ("CLIST_ITERATOR::forward", ABORT, NULL);
   if (!next)
     NULL_NEXT.error ("CLIST_ITERATOR::forward", ABORT,
-      "This is: %i  Current is: %i",
-      (int) this, (int) current);
+                     "This is: %p  Current is: %p", this, current);
   #endif
   return current->data;
 }
@@ -356,7 +316,7 @@ void *CLIST_ITERATOR::data_relative(                //get data + or - ...
                                     inT8 offset) {  //offset from current
   CLIST_LINK *ptr;
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST_ITERATOR::data_relative", ABORT, NULL);
   if (!list)
@@ -373,7 +333,7 @@ void *CLIST_ITERATOR::data_relative(                //get data + or - ...
   else
     for (ptr = current ? current : prev; offset-- > 0; ptr = ptr->next);
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!ptr)
     NULL_DATA.error ("CLIST_ITERATOR::data_relative", ABORT, NULL);
   #endif
@@ -391,7 +351,7 @@ void *CLIST_ITERATOR::data_relative(                //get data + or - ...
  **********************************************************************/
 
 void *CLIST_ITERATOR::move_to_last() {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST_ITERATOR::move_to_last", ABORT, NULL);
   if (!list)
@@ -425,7 +385,7 @@ void CLIST_ITERATOR::exchange(                             //positions of 2 link
 
   CLIST_LINK *old_current;
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST_ITERATOR::exchange", ABORT, NULL);
   if (!list)
@@ -524,7 +484,7 @@ CLIST_LINK *CLIST_ITERATOR::extract_sublist(                             //from 
   CLIST_LINK *end_of_new_list;
 
   const ERRCODE BAD_SUBLIST = "Can't find sublist end point in original list";
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   const ERRCODE BAD_EXTRACTION_PTS =
     "Can't extract sublist from points on different lists";
   const ERRCODE DONT_EXTRACT_DELETED =

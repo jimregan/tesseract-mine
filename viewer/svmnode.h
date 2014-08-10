@@ -25,8 +25,10 @@
 // A SVMenuNode can both be used in the context_ of popup menus as well as
 // menu bars.
 
-#ifndef THIRD_PARTY_TESSERACT_VIEWER_SVMNODE_H__
-#define THIRD_PARTY_TESSERACT_VIEWER_SVMNODE_H__
+#ifndef TESSERACT_VIEWER_SVMNODE_H__
+#define TESSERACT_VIEWER_SVMNODE_H__
+
+#include "strngs.h"
 
 class ScrollView;
 
@@ -82,13 +84,13 @@ class SVMenuNode {
   // The command event associated with a specific menu node. Should be unique.
   int cmd_event_;
   // The caption associated with a specific menu node.
-  char* text_;
+  STRING text_;
   // The value of the flag (if this menu node is a flag).
   bool toggle_value_;
   // The value of the menu node. (optional)
-  const char* value_;
+  STRING value_;
   // A description_ of the value. (optional)
-  const char* description_;
+  STRING description_;
 };
 
-#endif  // THIRD_PARTY_TESSERACT_VIEWER_SVMNODE_H__
+#endif  // TESSERACT_VIEWER_SVMNODE_H__

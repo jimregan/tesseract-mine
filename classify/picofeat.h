@@ -22,8 +22,23 @@
           Include Files and Type Defines
 ----------------------------------------------------------------------------**/
 #include "ocrfeatures.h"
-#include "tessclas.h"
-#include "fxdefs.h"
+#include "params.h"
+
+// Enum for the order/type of params in IntFeatDesc.
+enum IntParams {
+  IntX,   // x-position (0-255).
+  IntY,   // y-position (0-255).
+  IntDir  // Direction (0-255, circular).
+};
+
+// Enum for the order/type of params in GeoFeatDesc.
+enum GeoParams {
+  GeoBottom,   // Bounding box bottom in baseline space (0-255).
+  GeoTop,      // Bounding box top in baseline space (0-255).
+  GeoWidth,    // Bounding box width in baseline space (0-255).
+
+  GeoCount     // Number of geo features.
+};
 
 typedef enum
 { PicoFeatY, PicoFeatDir, PicoFeatX }
@@ -31,35 +46,27 @@ PICO_FEAT_PARAM_NAME;
 
 #define MAX_PICO_FEATURES (1000)
 
+/*---------------------------------------------------------------------------
+          Variables
+----------------------------------------------------------------------------*/
+
+extern double_VAR_H(classify_pico_feature_length, 0.05, "Pico Feature Length");
+
+
 /**----------------------------------------------------------------------------
           Public Function Prototypes
 ----------------------------------------------------------------------------**/
 #define GetPicoFeatureLength()  (PicoFeatureLength)
 
-FEATURE_SET ExtractPicoFeatures(TBLOB *Blob, LINE_STATS *LineStats); 
+FEATURE_SET ExtractIntCNFeatures(TBLOB *Blob, const DENORM& bl_denorm,
+                                 const DENORM& cn_denorm,
+                                 const INT_FX_RESULT_STRUCT& fx_info);
+FEATURE_SET ExtractIntGeoFeatures(TBLOB *Blob, const DENORM& bl_denorm,
+                                  const DENORM& cn_denorm,
+                                  const INT_FX_RESULT_STRUCT& fx_info);
 
-void InitPicoFXVars(); 
-
-/*
-#if defined(__STDC__) || defined(__cplusplus)
-# define        _ARGS(s) s
-#else
-# define        _ARGS(s) ()
-#endif*/
-
-/* picofeat.c
-FEATURE_SET ExtractPicoFeatures
-    _ARGS((BLOB *Blob,
-  LINE_STATS *LineStats));
-
-void InitPicoFXVars
-    _ARGS((void));
-
-#undef _ARGS
-*/
 /**----------------------------------------------------------------------------
         Global Data Definitions and Declarations
 ----------------------------------------------------------------------------**/
-extern FEATURE_DESC_STRUCT PicoFeatDesc;
 extern FLOAT32 PicoFeatureLength;
 #endif

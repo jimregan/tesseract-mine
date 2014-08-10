@@ -19,20 +19,24 @@
           Include Files and Type Defines
 ----------------------------------------------------------------------------**/
 #include "picofeat.h"
-#include "mfoutline.h"
-#include "variables.h"
-#include "sigmenu.h"
-#include "hideedge.h"
+
+#include "classify.h"
+#include "efio.h"
+#include "featdefs.h"
 #include "fpoint.h"
+#include "mfoutline.h"
+#include "ocrfeatures.h"
+#include "params.h"
+#include "trainingsample.h"
 
 #include <math.h>
+#include <stdio.h>
 
-#include "ocrfeatures.h"         //Debug
-#include <stdio.h>               //Debug
-#include "efio.h"                //Debug
-//#include "christydbg.h"
+/*---------------------------------------------------------------------------
+          Variables
+----------------------------------------------------------------------------*/
 
-#define PICO_FEATURE_LENGTH 0.05
+double_VAR(classify_pico_feature_length, 0.05, "Pico Feature Length");
 
 /*---------------------------------------------------------------------------
           Private Function Prototypes
@@ -45,44 +49,18 @@ void ConvertToPicoFeatures2(MFOUTLINE Outline, FEATURE_SET FeatureSet);
 
 void NormalizePicoX(FEATURE_SET FeatureSet);
 
-/*
-#if defined(__STDC__) || defined(__cplusplus)
-# define	_ARGS(s) s
-#else
-# define	_ARGS(s) ()
-#endif*/
-
-/* /users/danj/wiseowl/src/danj/microfeatures/picofeat.c
-void ConvertSegmentToPicoFeat
-  _ARGS((FPOINT *Start,
-  FPOINT *End,
-  FEATURE_SET FeatureSet));
-
-void ConvertToPicoFeatures2
-  _ARGS((MFOUTLINE Outline,
-  FEATURE_SET FeatureSet));
-
-void NormalizePicoX
-  _ARGS((FEATURE_SET FeatureSet));
-
-#undef _ARGS
-*/
-
-/**----------------------------------------------------------------------------
-        Global Data Definitions and Declarations
-----------------------------------------------------------------------------**/
-
 /**----------------------------------------------------------------------------
               Public Code
 ----------------------------------------------------------------------------**/
 /*---------------------------------------------------------------------------*/
-FEATURE_SET ExtractPicoFeatures(TBLOB *Blob, LINE_STATS *LineStats) {
+namespace tesseract {
+FEATURE_SET Classify::ExtractPicoFeatures(TBLOB *Blob) {
 /*
  **	Parameters:
  **		Blob		blob to extract pico-features from
  **		LineStats	statistics on text row blob is in
  **	Globals:
- **		NormMethod	normalization method currently specified
+ **		classify_norm_method	normalization method currently specified
  **	Operation: Dummy for now.
  **	Return: Pico-features for Blob.
  **	Exceptions: none
@@ -94,73 +72,21 @@ FEATURE_SET ExtractPicoFeatures(TBLOB *Blob, LINE_STATS *LineStats) {
   FEATURE_SET FeatureSet;
   FLOAT32 XScale, YScale;
 
-  FeatureSet = NewFeatureSet (MAX_PICO_FEATURES);
-
-  Outlines = ConvertBlob (Blob);
-
-  NormalizeOutlines(Outlines, LineStats, &XScale, &YScale);
+  FeatureSet = NewFeatureSet(MAX_PICO_FEATURES);
+  Outlines = ConvertBlob(Blob);
+  NormalizeOutlines(Outlines, &XScale, &YScale);
   RemainingOutlines = Outlines;
   iterate(RemainingOutlines) {
     Outline = (MFOUTLINE) first_node (RemainingOutlines);
-    /*---------Debug--------------------------------------------------*
-    OFile = fopen ("f:/ims/debug/pfOutline.logCPP", "r");
-    if (OFile == NULL)
-    {
-      OFile = Efopen ("f:/ims/debug/pfOutline.logCPP", "w");
-      WriteOutline(OFile, Outline);
-    }
-    else
-    {
-      fclose (OFile);
-      OFile = Efopen ("f:/ims/debug/pfOutline.logCPP", "a");
-    }
-    WriteOutline(OFile, Outline);
-    fclose (OFile);
-    *--------------------------------------------------------------------*/
     ConvertToPicoFeatures2(Outline, FeatureSet);
   }
-  if (NormMethod == baseline)
+  if (classify_norm_method == baseline)
     NormalizePicoX(FeatureSet);
-  /*---------Debug--------------------------------------------------*
-  File = fopen ("f:/ims/debug/pfFeatSet.logCPP", "r");
-  if (File == NULL)
-  {
-    File = Efopen ("f:/ims/debug/pfFeatSet.logCPP", "w");
-    WriteFeatureSet(File, FeatureSet);
-  }
-  else
-  {
-    fclose (File);
-    File = Efopen ("f:/ims/debug/pfFeatSet.logCPP", "a");
-  }
-  WriteFeatureSet(File, FeatureSet);
-  fclose (File);
-  *--------------------------------------------------------------------*/
   FreeOutlines(Outlines);
   return (FeatureSet);
 
 }                                /* ExtractPicoFeatures */
-
-
-/*---------------------------------------------------------------------------*/
-void InitPicoFXVars() {
-/*
- **	Parameters: none
- **	Globals:
- **		PicoFeatureLength	controls length of pico-features
- **	Operation: Initialize the pico-feature extractor variables that can
- **		be tuned without recompiling.
- **	Return: none
- **	Exceptions: none
- **	History: 9/4/90, DSJ, Created.
- */
-
-	VALUE dummy;
-
-	float_variable (PicoFeatureLength, "PicoFeatureLength",
-		PICO_FEATURE_LENGTH);
-
-}														/* InitPicoFXVars */
+}  // namespace tesseract
 
 /**----------------------------------------------------------------------------
               Private Code
@@ -175,7 +101,7 @@ void ConvertSegmentToPicoFeat(FPOINT *Start,
  **		End		ending point of pico-feature
  **		FeatureSet	set to add pico-feature to
  **	Globals:
- **		PicoFeatureLength	length of a single pico-feature
+ **		classify_pico_feature_length	length of a single pico-feature
  **	Operation: This routine converts an entire segment of an outline
  **		into a set of pico features which are added to
  **		FeatureSet.  The length of the segment is rounded to the
@@ -195,28 +121,28 @@ void ConvertSegmentToPicoFeat(FPOINT *Start,
 
   Angle = NormalizedAngleFrom (Start, End, 1.0);
   Length = DistanceBetween (*Start, *End);
-  NumFeatures = (int) floor (Length / PicoFeatureLength + 0.5);
+  NumFeatures = (int) floor (Length / classify_pico_feature_length + 0.5);
   if (NumFeatures < 1)
     NumFeatures = 1;
 
   /* compute vector for one pico feature */
-  Xof (Delta) = XDelta (*Start, *End) / NumFeatures;
-  Yof (Delta) = YDelta (*Start, *End) / NumFeatures;
+  Delta.x = XDelta (*Start, *End) / NumFeatures;
+  Delta.y = YDelta (*Start, *End) / NumFeatures;
 
   /* compute position of first pico feature */
-  Xof (Center) = Xof (*Start) + Xof (Delta) / 2.0;
-  Yof (Center) = Yof (*Start) + Yof (Delta) / 2.0;
+  Center.x = Start->x + Delta.x / 2.0;
+  Center.y = Start->y + Delta.y / 2.0;
 
   /* compute each pico feature in segment and add to feature set */
   for (i = 0; i < NumFeatures; i++) {
     Feature = NewFeature (&PicoFeatDesc);
-    ParamOf (Feature, PicoFeatDir) = Angle;
-    ParamOf (Feature, PicoFeatX) = Xof (Center);
-    ParamOf (Feature, PicoFeatY) = Yof (Center);
+    Feature->Params[PicoFeatDir] = Angle;
+    Feature->Params[PicoFeatX] = Center.x;
+    Feature->Params[PicoFeatY] = Center.y;
     AddFeature(FeatureSet, Feature);
 
-    Xof (Center) += Xof (Delta);
-    Yof (Center) += Yof (Delta);
+    Center.x += Delta.x;
+    Center.y += Delta.y;
   }
 }                                /* ConvertSegmentToPicoFeat */
 
@@ -228,7 +154,8 @@ void ConvertToPicoFeatures2(MFOUTLINE Outline, FEATURE_SET FeatureSet) {
  **		Outline		outline to extract micro-features from
  **		FeatureSet	set of features to add pico-features to
  **	Globals:
- **		PicoFeatureLength	length of features to be extracted
+ **		classify_pico_feature_length
+ **                             length of features to be extracted
  **	Operation:
  **		This routine steps thru the specified outline and cuts it
  **		up into pieces of equal length.  These pieces become the
@@ -242,24 +169,24 @@ void ConvertToPicoFeatures2(MFOUTLINE Outline, FEATURE_SET FeatureSet) {
   MFOUTLINE First;
   MFOUTLINE Current;
 
-  if (DegenerateOutline (Outline))
+  if (DegenerateOutline(Outline))
     return;
 
   First = Outline;
   Current = First;
-  Next = NextPointAfter (Current);
+  Next = NextPointAfter(Current);
   do {
     /* note that an edge is hidden if the ending point of the edge is
        marked as hidden.  This situation happens because the order of
        the outlines is reversed when they are converted from the old
        format.  In the old format, a hidden edge is marked by the
        starting point for that edge. */
-    if (IsVisible (PointAt (Next)))
-      ConvertSegmentToPicoFeat (&(PositionOf (PointAt (Current))),
-        &(PositionOf (PointAt (Next))), FeatureSet);
+    if (!(PointAt(Next)->Hidden))
+      ConvertSegmentToPicoFeat (&(PointAt(Current)->Point),
+        &(PointAt(Next)->Point), FeatureSet);
 
     Current = Next;
-    Next = NextPointAfter (Current);
+    Next = NextPointAfter(Current);
   }
   while (Current != First);
 
@@ -284,14 +211,80 @@ void NormalizePicoX(FEATURE_SET FeatureSet) {
   FEATURE Feature;
   FLOAT32 Origin = 0.0;
 
-  for (i = 0; i < NumFeaturesIn (FeatureSet); i++) {
-    Feature = FeatureIn (FeatureSet, i);
-    Origin += ParamOf (Feature, PicoFeatX);
+  for (i = 0; i < FeatureSet->NumFeatures; i++) {
+    Feature = FeatureSet->Features[i];
+    Origin += Feature->Params[PicoFeatX];
   }
-  Origin /= NumFeaturesIn (FeatureSet);
+  Origin /= FeatureSet->NumFeatures;
 
-  for (i = 0; i < NumFeaturesIn (FeatureSet); i++) {
-    Feature = FeatureIn (FeatureSet, i);
-    ParamOf (Feature, PicoFeatX) -= Origin;
+  for (i = 0; i < FeatureSet->NumFeatures; i++) {
+    Feature = FeatureSet->Features[i];
+    Feature->Params[PicoFeatX] -= Origin;
   }
 }                                /* NormalizePicoX */
+
+/*---------------------------------------------------------------------------*/
+FEATURE_SET ExtractIntCNFeatures(TBLOB *blob, const DENORM& bl_denorm,
+                                 const DENORM& cn_denorm,
+                                 const INT_FX_RESULT_STRUCT& fx_info) {
+/*
+ ** Parameters:
+ **   blob    blob to extract features from
+ **   denorm  normalization/denormalization parameters.
+ ** Return: Integer character-normalized features for blob.
+ ** Exceptions: none
+ ** History: 8/8/2011, rays, Created.
+ */
+  INT_FX_RESULT_STRUCT local_fx_info(fx_info);
+  GenericVector<INT_FEATURE_STRUCT> bl_features;
+  tesseract::TrainingSample* sample =
+      tesseract::BlobToTrainingSample(*blob, false, &local_fx_info,
+                                      &bl_features);
+  if (sample == NULL) return NULL;
+
+  int num_features = sample->num_features();
+  const INT_FEATURE_STRUCT* features = sample->features();
+  FEATURE_SET feature_set = NewFeatureSet(num_features);
+  for (int f = 0; f < num_features; ++f) {
+    FEATURE feature = NewFeature(&IntFeatDesc);
+
+    feature->Params[IntX] = features[f].X;
+    feature->Params[IntY] = features[f].Y;
+    feature->Params[IntDir] = features[f].Theta;
+    AddFeature(feature_set, feature);
+  }
+  delete sample;
+
+  return feature_set;
+}                                /* ExtractIntCNFeatures */
+
+/*---------------------------------------------------------------------------*/
+FEATURE_SET ExtractIntGeoFeatures(TBLOB *blob, const DENORM& bl_denorm,
+                                  const DENORM& cn_denorm,
+                                  const INT_FX_RESULT_STRUCT& fx_info) {
+/*
+ ** Parameters:
+ **   blob    blob to extract features from
+ **   denorm  normalization/denormalization parameters.
+ ** Return: Geometric (top/bottom/width) features for blob.
+ ** Exceptions: none
+ ** History: 8/8/2011, rays, Created.
+ */
+  INT_FX_RESULT_STRUCT local_fx_info(fx_info);
+  GenericVector<INT_FEATURE_STRUCT> bl_features;
+  tesseract::TrainingSample* sample =
+      tesseract::BlobToTrainingSample(*blob, false, &local_fx_info,
+                                      &bl_features);
+  if (sample == NULL) return NULL;
+
+  FEATURE_SET feature_set = NewFeatureSet(1);
+  FEATURE feature = NewFeature(&IntFeatDesc);
+
+  feature->Params[GeoBottom] = sample->geo_feature(GeoBottom);
+  feature->Params[GeoTop] = sample->geo_feature(GeoTop);
+  feature->Params[GeoWidth] = sample->geo_feature(GeoWidth);
+  AddFeature(feature_set, feature);
+  delete sample;
+
+  return feature_set;
+}                                /* ExtractIntGeoFeatures */

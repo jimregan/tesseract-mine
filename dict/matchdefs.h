@@ -21,29 +21,27 @@
 /**----------------------------------------------------------------------------
           Include Files and Type Defines
 ----------------------------------------------------------------------------**/
-#include "general.h"
+#include "host.h"
 #include <stdio.h>
 #include "unichar.h"
 
 /* define the maximum number of classes defined for any matcher
   and the maximum class id for any matcher. This must be changed
   if more different classes need to be classified */
-/* Script Detection: Put this value to the size of the unicharset. Currently a
- * value of 9000 is enough. */
-#define MAX_NUM_CLASSES   8192
+#define MAX_NUM_CLASSES   MAX_INT16
 #define MAX_CLASS_ID    (MAX_NUM_CLASSES - 1)
 
-/* a CLASS_ID is the ascii character to be associated with a class */
+/** a CLASS_ID is the ascii character to be associated with a class */
 typedef UNICHAR_ID CLASS_ID;
 #define NO_CLASS      (0)
 
-/* a PROTO_ID is the index of a prototype within it's class.  Valid proto
+/** a PROTO_ID is the index of a prototype within it's class.  Valid proto
   id's are 0 to N-1 where N is the number of prototypes that make up the
   class. */
 typedef inT16 PROTO_ID;
 #define NO_PROTO  (-1)
 
-/* FEATURE_ID is the index of a feature within a character description
+/** FEATURE_ID is the index of a feature within a character description
   The feature id ranges from 0 to N-1 where N is the number
   of features in a character description. */
 typedef uinT8 FEATURE_ID;
@@ -53,17 +51,17 @@ typedef uinT8 FEATURE_ID;
 #define MAX_NUM_FEAT    40
 #define MAX_FEATURE_ID    250
 
-/* a RATING is the match rating returned by a classifier.
+/** a RATING is the match rating returned by a classifier.
   Higher is better. */
 typedef FLOAT32 RATING;
 
-/* a CERTAINTY is an indication of the degree of confidence of the
+/** a CERTAINTY is an indication of the degree of confidence of the
   classifier.  Higher is better.  0 means the match is as good as the
   mean of the matches seen in training.  -1 means the match was one
   standard deviation worse than the training matches, etc. */
 typedef FLOAT32 CERTAINTY;
 
-/* define a data structure to hold a single match result */
+/** define a data structure to hold a single match result */
 typedef struct
 {
   CLASS_ID Class;
@@ -74,42 +72,18 @@ typedef struct
 
 MATCH_RESULT;
 
-/* define a data structure for holding an array of match results */
+/** define a data structure for holding an array of match results */
 typedef MATCH_RESULT SORTED_CLASSES[MAX_CLASS_ID + 1];
 
-/**----------------------------------------------------------------------------
+/*----------------------------------------------------------------------------
           Public Function Prototypes
-----------------------------------------------------------------------------**/
-/* all feature matchers that are to be used with the high level
+----------------------------------------------------------------------------*/
+/**
+  all feature matchers that are to be used with the high level
   classifier must support the following interface.  The names will, of
   course, be unique for each different matcher.  Note also that
   FEATURE_STRUCT is a data structure that is defined specifically for
   each feature extractor/matcher pair.
-
-void						InitClassifier		();
-
-void						InitClassifierVars	();
-
-int							TweekClassifier		(char *Params);
-
-void						InitQuickGuess		(FEATURE_STRUCT *CharFeatures);
-
-CLASS_ID					NextQuickGuess		();
-
-void						MatchCharToClass	(CLASS_ID
-              ClassID,
-                          FEATURE_STRUCT
-              *CharFeatures,
-                          MATCH_RESULT
-              *MatchResult);
-
-void						DebugMatch		(CLASS_ID
-              ClassID,
-                          FEATURE_STRUCT
-              *CharFeatures,
-          MATCH_RESULT
-              *MatchResult);
-
 */
 
 /* misc test functions for proto id's and feature id's */
@@ -133,7 +107,7 @@ _ARGS ((FILE * File, int N, MATCH_RESULT MatchResults[]));
 
 #undef _ARGS
 
-/**----------------------------------------------------------------------------
+/*----------------------------------------------------------------------------
         Global Data Definitions and Declarations
-----------------------------------------------------------------------------**/
+----------------------------------------------------------------------------*/
 #endif

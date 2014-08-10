@@ -17,23 +17,12 @@
  *
  **********************************************************************/
 
-#include "mfcpch.h"
 #include          <stdio.h>
 #include          <math.h>
 #include          "errcode.h"
 #include          "linlsq.h"
 
-#ifndef __UNIX__
-#define M_PI        3.14159265359
-#endif
-
 const ERRCODE EMPTY_LLSQ = "Can't delete from an empty LLSQ";
-
-#define EXTERN
-
-EXTERN double_VAR (pdlsq_posdir_ratio, 4e-6, "Mult of dir to cf pos");
-EXTERN double_VAR (pdlsq_threshold_angleavg, 0.1666666,
-"Frac of pi for simple fit");
 
 /**********************************************************************
  * LLSQ::clear
@@ -41,13 +30,13 @@ EXTERN double_VAR (pdlsq_threshold_angleavg, 0.1666666,
  * Function to initialize a LLSQ.
  **********************************************************************/
 
-void LLSQ::clear() {  //initialize
-  n = 0;                         //no elements
-  sigx = 0;                      //update accumulators
-  sigy = 0;
-  sigxx = 0;
-  sigxy = 0;
-  sigyy = 0;
+void LLSQ::clear() {  // initialize
+  total_weight = 0.0;                         // no elements
+  sigx = 0.0;                      // update accumulators
+  sigy = 0.0;
+  sigxx = 0.0;
+  sigxy = 0.0;
+  sigyy = 0.0;
 }
 
 
@@ -57,16 +46,31 @@ void LLSQ::clear() {  //initialize
  * Add an element to the accumulator.
  **********************************************************************/
 
-void LLSQ::add(           //add an element
-               double x,  //xcoord
-               double y   //ycoord
-              ) {
-  n++;                           //count elements
-  sigx += x;                     //update accumulators
+void LLSQ::add(double x, double y) {          // add an element
+  total_weight++;                           // count elements
+  sigx += x;                     // update accumulators
   sigy += y;
   sigxx += x * x;
   sigxy += x * y;
   sigyy += y * y;
+}
+// Adds an element with a specified weight.
+void LLSQ::add(double x, double y, double weight) {
+  total_weight += weight;
+  sigx += x * weight;                     // update accumulators
+  sigy += y * weight;
+  sigxx += x * x * weight;
+  sigxy += x * y * weight;
+  sigyy += y * y * weight;
+}
+// Adds a whole LLSQ.
+void LLSQ::add(const LLSQ& other) {
+  total_weight += other.total_weight;
+  sigx += other.sigx;                     // update accumulators
+  sigy += other.sigy;
+  sigxx += other.sigxx;
+  sigxy += other.sigxy;
+  sigyy += other.sigyy;
 }
 
 
@@ -76,15 +80,11 @@ void LLSQ::add(           //add an element
  * Delete an element from the acculuator.
  **********************************************************************/
 
-void LLSQ::remove(           //delete an element
-                  double x,  //xcoord
-                  double y   //ycoord
-                 ) {
-  if (n <= 0)
-                                 //illegal
-    EMPTY_LLSQ.error ("LLSQ::remove", ABORT, NULL);
-  n--;                           //count elements
-  sigx -= x;                     //update accumulators
+void LLSQ::remove(double x, double y) {          // delete an element
+  if (total_weight <= 0.0)                       // illegal
+    EMPTY_LLSQ.error("LLSQ::remove", ABORT, NULL);
+  total_weight--;                           // count elements
+  sigx -= x;                     // update accumulators
   sigy -= y;
   sigxx -= x * x;
   sigxy -= x * y;
@@ -98,11 +98,13 @@ void LLSQ::remove(           //delete an element
  * Return the gradient of the line fit.
  **********************************************************************/
 
-double LLSQ::m() {  //get gradient
-  if (n > 1)
-    return (sigxy - sigx * sigy / n) / (sigxx - sigx * sigx / n);
+double LLSQ::m() const {  // get gradient
+  double covar = covariance();
+  double x_var = x_variance();
+  if (x_var != 0.0)
+    return covar / x_var;
   else
-    return 0;                    //too little
+    return 0.0;                    // too little
 }
 
 
@@ -112,13 +114,11 @@ double LLSQ::m() {  //get gradient
  * Return the constant of the line fit.
  **********************************************************************/
 
-double LLSQ::c(          //get constant
-               double m  //gradient to fit with
-              ) {
-  if (n > 0)
-    return (sigy - m * sigx) / n;
+double LLSQ::c(double m) const {          // get constant
+  if (total_weight > 0.0)
+    return (sigy - m * sigx) / total_weight;
   else
-    return 0;                    //too little
+    return 0;                    // too little
 }
 
 
@@ -128,122 +128,132 @@ double LLSQ::c(          //get constant
  * Return the rms error of the fit.
  **********************************************************************/
 
-double LLSQ::rms(           //get error
-                 double m,  //gradient to fit with
-                 double c   //constant to fit with
-                ) {
-  double error;                  //total error
+double LLSQ::rms(double m,  double c) const {          // get error
+  double error;                  // total error
 
-  if (n > 0) {
-    error =
-      sigyy + m * (m * sigxx + 2 * (c * sigx - sigxy)) + c * (n * c -
-      2 * sigy);
+  if (total_weight > 0) {
+    error = sigyy + m * (m * sigxx + 2 * (c * sigx - sigxy)) + c *
+            (total_weight * c - 2 * sigy);
     if (error >= 0)
-      error = sqrt (error / n);  //sqrt of mean
+      error = sqrt(error / total_weight);  // sqrt of mean
     else
       error = 0;
+  } else {
+    error = 0;                   // too little
   }
-  else
-    error = 0;                   //too little
   return error;
 }
 
 
 /**********************************************************************
- * LLSQ::spearman
+ * LLSQ::pearson
  *
- * Return the spearman correlation coefficient.
+ * Return the pearson product moment correlation coefficient.
  **********************************************************************/
 
-double LLSQ::spearman() {  //get error
-  double error;                  //total error
+double LLSQ::pearson() const {  // get correlation
+  double r = 0.0;                  // Correlation is 0 if insufficent data.
 
-  if (n > 1) {
-    error = (sigxx - sigx * sigx / n) * (sigyy - sigy * sigy / n);
-    if (error > 0) {
-      error = (sigxy - sigx * sigy / n) / sqrt (error);
-    }
-    else
-      error = 1;
+  double covar = covariance();
+  if (covar != 0.0) {
+    double var_product = x_variance()  * y_variance();
+    if (var_product > 0.0)
+      r = covar / sqrt(var_product);
   }
-  else
-    error = 1;                   //too little
-  return error;
+  return r;
 }
 
-
-/**********************************************************************
- * PDLSQ::fit
- *
- * Return all the parameters of the fit to pos/dir.
- * The return value is the rms error.
- **********************************************************************/
-
-float PDLSQ::fit(                 //get fit
-                 DIR128 &ang,     //output angle
-                 float &sin_ang,  //r,theta parameterisation
-                 float &cos_ang,
-                 float &r) {
-  double a, b;                   //itermediates
-  double angle;                  //resulting angle
-  double avg_angle;              //simple average
-  double error;                  //total error
-  double sinx, cosx;             //return values
-
-  if (pos.n > 0) {
-    a = pos.sigxy - pos.sigx * pos.sigy / pos.n
-      + pdlsq_posdir_ratio * dir.sigxy;
-    b =
-      pos.sigxx - pos.sigyy + (pos.sigy * pos.sigy -
-      pos.sigx * pos.sigx) / pos.n +
-      pdlsq_posdir_ratio * (dir.sigxx - dir.sigyy);
-    if (dir.sigy != 0 || dir.sigx != 0)
-      avg_angle = atan2 (dir.sigy, dir.sigx);
-    else
-      avg_angle = 0;
-    if ((a != 0 || b != 0) && pos.n > 1)
-      angle = atan2 (2 * a, b) / 2;
-    else
-      angle = avg_angle;
-    error = avg_angle - angle;
-    if (error > M_PI / 2) {
-      error -= M_PI;
-      angle += M_PI;
-    }
-    if (error < -M_PI / 2) {
-      error += M_PI;
-      angle -= M_PI;
-    }
-    if (error > M_PI * pdlsq_threshold_angleavg
-      || error < -M_PI * pdlsq_threshold_angleavg)
-      angle = avg_angle;         //go simple
-                                 //convert direction
-    ang = (inT16) (angle * MODULUS / (2 * M_PI));
-    sinx = sin (angle);
-    cosx = cos (angle);
-    r = (sinx * pos.sigx - cosx * pos.sigy) / pos.n;
-    //              tprintf("x=%g, y=%g, xx=%g, xy=%g, yy=%g, a=%g, b=%g, ang=%g, r=%g\n",
-    //                      pos.sigx,pos.sigy,pos.sigxx,pos.sigxy,pos.sigyy,
-    //                      a,b,angle,r);
-    error = dir.sigxx * sinx * sinx + dir.sigyy * cosx * cosx
-      - 2 * dir.sigxy * sinx * cosx;
-    error *= pdlsq_posdir_ratio;
-    error += sinx * sinx * pos.sigxx + cosx * cosx * pos.sigyy
-      - 2 * sinx * cosx * pos.sigxy
-      - 2 * r * (sinx * pos.sigx - cosx * pos.sigy) + r * r * pos.n;
-    if (error >= 0)
-                                 //rms value
-        error = sqrt (error / pos.n);
-    else
-      error = 0;                 //-0
-    sin_ang = sinx;
-    cos_ang = cosx;
+// Returns the x,y means as an FCOORD.
+FCOORD LLSQ::mean_point() const {
+  if (total_weight > 0.0) {
+    return FCOORD(sigx / total_weight, sigy / total_weight);
+  } else {
+    return FCOORD(0.0f, 0.0f);
   }
-  else {
-    sin_ang = 0.0f;
-    cos_ang = 0.0f;
-    ang = 0;
-    error = 0;                   //too little
-  }
-  return error;
+}
+
+// Returns the sqrt of the mean squared error measured perpendicular from the
+// line through mean_point() in the direction dir.
+//
+// Derivation:
+//   Lemma:  Let v and x_i (i=1..N) be a k-dimensional vectors (1xk matrices).
+//     Let % be dot product and ' be transpose.  Note that:
+//      Sum[i=1..N] (v % x_i)^2
+//         = v * [x_1' x_2' ... x_N'] * [x_1' x_2' .. x_N']' * v'
+//     If x_i have average 0 we have:
+//       = v * (N * COVARIANCE_MATRIX(X)) * v'
+//     Expanded for the case that k = 2, where we treat the dimensions
+//     as x_i and y_i, this is:
+//       = v * (N * [VAR(X), COV(X,Y); COV(X,Y) VAR(Y)]) * v'
+//  Now, we are trying to calculate the mean squared error, where v is
+//  perpendicular to our line of interest:
+//    Mean squared error
+//      = E [ (v % (x_i - x_avg))) ^2 ]
+//      = Sum (v % (x_i - x_avg))^2 / N
+//      = v * N * [VAR(X) COV(X,Y); COV(X,Y) VAR(Y)] / N * v'
+//      = v * [VAR(X) COV(X,Y); COV(X,Y) VAR(Y)] * v'
+//      = code below
+double LLSQ::rms_orth(const FCOORD &dir) const {
+  FCOORD v = !dir;
+  v.normalise();
+  return sqrt(v.x() * v.x() * x_variance() +
+              2 * v.x() * v.y() * covariance() +
+              v.y() * v.y() * y_variance());
+}
+
+// Returns the direction of the fitted line as a unit vector, using the
+// least mean squared perpendicular distance. The line runs through the
+// mean_point, i.e. a point p on the line is given by:
+// p = mean_point() + lambda * vector_fit() for some real number lambda.
+// Note that the result (0<=x<=1, -1<=y<=-1) is directionally ambiguous
+// and may be negated without changing its meaning.
+// Fitting a line m + 𝜆v to a set of N points Pi = (xi, yi), where
+// m is the mean point (𝝁, 𝝂) and
+// v is the direction vector (cos𝜃, sin𝜃)
+// The perpendicular distance of each Pi from the line is:
+// (Pi - m) x v, where x is the scalar cross product.
+// Total squared error is thus:
+// E = ∑((xi - 𝝁)sin𝜃 - (yi - 𝝂)cos𝜃)²
+//   = ∑(xi - 𝝁)²sin²𝜃  - 2∑(xi - 𝝁)(yi - 𝝂)sin𝜃 cos𝜃 + ∑(yi - 𝝂)²cos²𝜃
+//   = NVar(xi)sin²𝜃  - 2NCovar(xi, yi)sin𝜃 cos𝜃  + NVar(yi)cos²𝜃   (Eq 1)
+// where Var(xi) is the variance of xi,
+// and Covar(xi, yi) is the covariance of xi, yi.
+// Taking the derivative wrt 𝜃 and setting to 0 to obtain the min/max:
+// 0 = 2NVar(xi)sin𝜃 cos𝜃 -2NCovar(xi, yi)(cos²𝜃 - sin²𝜃) -2NVar(yi)sin𝜃 cos𝜃
+// => Covar(xi, yi)(cos²𝜃 - sin²𝜃) = (Var(xi) - Var(yi))sin𝜃 cos𝜃
+// Using double angles:
+// 2Covar(xi, yi)cos2𝜃 = (Var(xi) - Var(yi))sin2𝜃   (Eq 2)
+// So 𝜃 = 0.5 atan2(2Covar(xi, yi), Var(xi) - Var(yi)) (Eq 3)
+
+// Because it involves 2𝜃 , Eq 2 has 2 solutions 90 degrees apart, but which
+// is the min and which is the max? From Eq1:
+// E/N = Var(xi)sin²𝜃  - 2Covar(xi, yi)sin𝜃 cos𝜃  + Var(yi)cos²𝜃
+// and 90 degrees away, using sin/cos equivalences:
+// E'/N = Var(xi)cos²𝜃  + 2Covar(xi, yi)sin𝜃 cos𝜃  + Var(yi)sin²𝜃
+// The second error is smaller (making it the minimum) iff
+// E'/N < E/N ie:
+// (Var(xi) - Var(yi))(cos²𝜃 - sin²𝜃) < -4Covar(xi, yi)sin𝜃 cos𝜃
+// Using double angles:
+// (Var(xi) - Var(yi))cos2𝜃  < -2Covar(xi, yi)sin2𝜃  (InEq 1)
+// But atan2(2Covar(xi, yi), Var(xi) - Var(yi)) picks 2𝜃  such that:
+// sgn(cos2𝜃) = sgn(Var(xi) - Var(yi)) and sgn(sin2𝜃) = sgn(Covar(xi, yi))
+// so InEq1 can *never* be true, making the atan2 result *always* the min!
+// In the degenerate case, where Covar(xi, yi) = 0 AND Var(xi) = Var(yi),
+// the 2 solutions have equal error and the inequality is still false.
+// Therefore the solution really is as trivial as Eq 3.
+
+// This is equivalent to returning the Principal Component in PCA, or the
+// eigenvector corresponding to the largest eigenvalue in the covariance
+// matrix.  However, atan2 is much simpler! The one reference I found that
+// uses this formula is http://web.mit.edu/18.06/www/Essays/tlsfit.pdf but
+// that is still a much more complex derivation. It seems Pearson had already
+// found this simple solution in 1901.
+// http://books.google.com/books?id=WXwvAQAAIAAJ&pg=PA559
+FCOORD LLSQ::vector_fit() const {
+  double x_var = x_variance();
+  double y_var = y_variance();
+  double covar = covariance();
+  double theta = 0.5 * atan2(2.0 * covar, x_var - y_var);
+  FCOORD result(cos(theta), sin(theta));
+  return result;
 }

@@ -20,9 +20,10 @@
 #ifndef           STRNGS_H
 #define           STRNGS_H
 
+#include          <stdio.h>
 #include          <string.h>
+#include          "platform.h"
 #include          "memry.h"
-#include          "serialis.h"
 
 // STRING_IS_PROTECTED means that  string[index] = X is invalid
 // because you have to go through strings interface to modify it.
@@ -34,7 +35,9 @@
 // cannot assume we know the strlen.
 #define STRING_IS_PROTECTED  0
 
-class DLLSYM STRING
+template <typename T> class GenericVector;
+
+class TESS_API STRING
 {
   public:
     STRING();
@@ -42,19 +45,33 @@ class DLLSYM STRING
     STRING(const char *string);
     ~STRING ();
 
+    // Writes to the given file. Returns false in case of error.
+    bool Serialize(FILE* fp) const;
+    // Reads from the given file. Returns false in case of error.
+    // If swap is true, assumes a big/little-endian swap is needed.
+    bool DeSerialize(bool swap, FILE* fp);
+
     BOOL8 contains(const char c) const;
     inT32 length() const;
+    inT32 size() const { return length(); }
     const char *string() const;
+    const char *c_str() const;
+
+    inline char* strdup() const {
+     inT32 len = length() + 1;
+     return strncpy(new char[len], GetCStr(), len);
+    }
 
 #if STRING_IS_PROTECTED
     const char &operator[] (inT32 index) const;
     // len is number of chars in s to insert starting at index in this string
     void insert_range(inT32 index, const char*s, int len);
     void erase_range(inT32 index, int len);
-    void truncate_at(inT32 index);
 #else
     char &operator[] (inT32 index) const;
 #endif
+    void split(const char c, GenericVector<STRING> *splited);
+    void truncate_at(inT32 index);
 
     BOOL8 operator== (const STRING & string) const;
     BOOL8 operator!= (const STRING & string) const;
@@ -70,17 +87,18 @@ class DLLSYM STRING
     STRING & operator+= (const STRING & string);
     STRING & operator+= (const char ch);
 
-    // WARNING
-    // This method leaks the underlying pointer,
-    // but that is what the original implementation did
-    void prep_serialise();
+    // Assignment for strings which are not null-terminated.
+    void assign(const char *cstr, int len);
 
-    void dump(FILE *f);
-    void de_dump(FILE *f);
+    // Appends the given string and int (as a %d) to this.
+    // += cannot be used for ints as there as a char += operator that would
+    // be ambiguous, and ints usually need a string before or between them
+    // anyway.
+    void add_str_int(const char* str, int number);
+    // Appends the given string and double (as a %.8g) to this.
+    void add_str_double(const char* str, double number);
 
-    make_serialise (STRING)
-
-    // ensure capcaity but keep pointer encapsulated
+    // ensure capacity but keep pointer encapsulated
     inline void ensure(inT32 min_capacity) { ensure_cstr(min_capacity); }
 
   private:
@@ -124,6 +142,14 @@ class DLLSYM STRING
     inline const char* GetCStr() const {
       return ((const char *)data_) + sizeof(STRING_HEADER);
     };
+    inline bool InvariantOk() const {
+#if STRING_IS_PROTECTED
+      return (GetHeader()->used_ == 0) ?
+        (string() == NULL) : (GetHeader()->used_ == (strlen(string()) + 1));
+#else
+      return true;
+#endif
+    }
 
     // Ensure string has requested capacity as optimization
     // to avoid unnecessary reallocations.

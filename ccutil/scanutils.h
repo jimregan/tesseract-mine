@@ -16,15 +16,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SCANUTILS_H
-#define SCANUTILS_H
-
-#ifdef EMBEDDED
+#ifndef TESSERACT_CCUTIL_SCANUTILS_H_
+#define TESSERACT_CCUTIL_SCANUTILS_H_
 
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
-#include <klibc/extern.h>
+#include <sys/stat.h>
+
+/**
+ * fscanf variant to ensure correct reading regardless of locale.
+ *
+ * tfscanf parse a file stream according to the given format. See the fscanf
+ * manpage for more information, as this function attempts to mimic its
+ * behavior.
+ *
+ * @note Note that scientific floating-point notation is not supported.
+ *
+ */
+int tfscanf(FILE* stream, const char *format, ...);
+
+#ifdef EMBEDDED
 
 // Attempts to parse the given file stream s as an integer of the base
 // 'base'. Returns the first successfully parsed integer as a uintmax_t, or
@@ -50,6 +62,6 @@ int creat(const char *pathname, mode_t mode);
 // floating-point notation is not supported.
 double strtofloat(const char* s);
 
-#endif
+#endif  // EMBEDDED
 
-#endif
+#endif  // TESSERACT_CCUTIL_SCANUTILS_H_

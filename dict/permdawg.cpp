@@ -25,436 +25,375 @@
 /*----------------------------------------------------------------------
               I n c l u d e s
 ----------------------------------------------------------------------*/
-#include "permdawg.h"
-#include "debug.h"
-#include "hyphen.h"
-#include "permute.h"
-#include "tordvars.h"
-#include "context.h"
-#include "stopper.h"
-#include "freelist.h"
-#include "globals.h"
-#include "tprintf.h"
+
 #include "cutil.h"
 #include "dawg.h"
+#include "freelist.h"
+#include "globals.h"
 #include "ndminx.h"
-#include "varable.h"
-#include "conversion.h"
+#include "stopper.h"
+#include "tprintf.h"
+#include "params.h"
 
 #include <ctype.h>
 #include "dict.h"
-#include "image.h"
-
-/*----------------------------------------------------------------------
-              T y p e s
-----------------------------------------------------------------------*/
-#define FREQ_WERD     1.0
-#define GOOD_WERD     1.1
-#define OK_WERD       1.3125
-#define MAX_FREQ_EDGES    1500
-#define NO_RATING              -1
-
-/*----------------------------------------------------------------------
-              V a r i a b l e s
-----------------------------------------------------------------------*/
-static EDGE_ARRAY frequent_words;
-static float rating_margin;
-static float rating_pad = 5.0;
-
-BOOL_VAR(segment_dawg_debug, 0, "Debug mode for word segmentation");
-
-double_VAR(segment_penalty_dict_punc_bad, OK_WERD,
-           "Default score multiplier for word matches, which may have case or "
-           "punctuation issues (lower is better).");
-
-double_VAR(segment_penalty_dict_punc_ok, GOOD_WERD,
-           "Score multiplier for word matches that have good case "
-           "(lower is better).");
-
-double_VAR(segment_penalty_dict_frequent_word, FREQ_WERD,
-           "Score multiplier for word matches which have good case and are "
-           "frequent in the given language (lower is better).");
 
 /*----------------------------------------------------------------------
               F u n c t i o n s
 ----------------------------------------------------------------------*/
-/**********************************************************************
- * adjust_word
- *
- * Assign an adjusted value to a string that is a word.	The value
- * that this word choice has is based on case and punctuation rules.
- **********************************************************************/
 namespace tesseract {
-void Dict::adjust_word(A_CHOICE *best_choice, float *certainty_array) {
-  char *this_word;
-  int punct_status;
-  float adjust_factor;
 
-  if (segment_adjust_debug)
-    tprintf ("Word: %s %4.2f ",
-      class_string (best_choice), class_rating (best_choice));
+/**
+ * @name go_deeper_dawg_fxn
+ *
+ * If the choice being composed so far could be a dictionary word
+ * keep exploring choices.
+ */
+void Dict::go_deeper_dawg_fxn(
+    const char *debug, const BLOB_CHOICE_LIST_VECTOR &char_choices,
+    int char_choice_index, const CHAR_FRAGMENT_INFO *prev_char_frag_info,
+    bool word_ending, WERD_CHOICE *word, float certainties[], float *limit,
+    WERD_CHOICE *best_choice, int *attempts_left, void *void_more_args) {
+  DawgArgs *more_args = reinterpret_cast<DawgArgs*>(void_more_args);
+  word_ending = (char_choice_index == char_choices.size()-1);
+  int word_index = word->length() - 1;
+  if (best_choice->rating() < *limit) return;
+  // Look up char in DAWG
 
-  this_word = class_string (best_choice);
-  punct_status = punctuation_ok (this_word, class_lengths (best_choice));
-
-  class_rating (best_choice) += RATING_PAD;
-  if (case_ok (this_word, class_lengths (best_choice))
-      && punct_status != -1) {
-    if (punct_status < 1 && word_in_dawg (frequent_words, this_word)) {
-      class_rating (best_choice) *= segment_penalty_dict_frequent_word;
-      class_permuter (best_choice) = FREQ_DAWG_PERM;
-      adjust_factor = segment_penalty_dict_frequent_word;
-      if (segment_adjust_debug)
-        tprintf(", F, %4.2f ", (double)segment_penalty_dict_frequent_word);
+  // If the current unichar is an ngram first try calling
+  // letter_is_okay() for each unigram it contains separately.
+  UNICHAR_ID orig_uch_id = word->unichar_id(word_index);
+  bool checked_unigrams = false;
+  if (getUnicharset().get_isngram(orig_uch_id)) {
+    if (dawg_debug_level) {
+      tprintf("checking unigrams in an ngram %s\n",
+              getUnicharset().debug_str(orig_uch_id).string());
     }
-    else {
-      class_rating (best_choice) *= segment_penalty_dict_punc_ok;
-      adjust_factor = segment_penalty_dict_punc_ok;
-      if (segment_adjust_debug)
-        tprintf(", %4.2f ", (double)segment_penalty_dict_punc_ok);
+    int num_unigrams = 0;
+    word->remove_last_unichar_id();
+    GenericVector<UNICHAR_ID> encoding;
+    const char *ngram_str = getUnicharset().id_to_unichar(orig_uch_id);
+    // Since the string came out of the unicharset, failure is impossible.
+    ASSERT_HOST(getUnicharset().encode_string(ngram_str, true, &encoding, NULL,
+                                              NULL));
+    bool unigrams_ok = true;
+    // Construct DawgArgs that reflect the current state.
+    DawgPositionVector unigram_active_dawgs = *(more_args->active_dawgs);
+    DawgPositionVector unigram_updated_dawgs;
+    DawgArgs unigram_dawg_args(&unigram_active_dawgs,
+                               &unigram_updated_dawgs,
+                               more_args->permuter);
+    // Check unigrams in the ngram with letter_is_okay().
+    for (int i = 0; unigrams_ok && i < encoding.size(); ++i) {
+      UNICHAR_ID uch_id = encoding[i];
+      ASSERT_HOST(uch_id != INVALID_UNICHAR_ID);
+      ++num_unigrams;
+      word->append_unichar_id(uch_id, 1, 0.0, 0.0);
+      unigrams_ok = (this->*letter_is_okay_)(
+          &unigram_dawg_args,
+          word->unichar_id(word_index+num_unigrams-1),
+          word_ending && i == encoding.size() - 1);
+      (*unigram_dawg_args.active_dawgs) = *(unigram_dawg_args.updated_dawgs);
+      if (dawg_debug_level) {
+        tprintf("unigram %s is %s\n",
+                getUnicharset().debug_str(uch_id).string(),
+                unigrams_ok ? "OK" : "not OK");
+      }
+    }
+    // Restore the word and copy the updated dawg state if needed.
+    while (num_unigrams-- > 0) word->remove_last_unichar_id();
+    word->append_unichar_id_space_allocated(orig_uch_id, 1, 0.0, 0.0);
+    if (unigrams_ok) {
+      checked_unigrams = true;
+      more_args->permuter = unigram_dawg_args.permuter;
+      *(more_args->updated_dawgs) = *(unigram_dawg_args.updated_dawgs);
     }
   }
-  else {
-    class_rating (best_choice) *= segment_penalty_dict_punc_bad;
-    adjust_factor = segment_penalty_dict_punc_bad;
-    if (segment_adjust_debug) {
-      if (!case_ok (this_word, class_lengths (best_choice)))
-        tprintf(", C");
-      if (punctuation_ok (this_word, class_lengths (best_choice)) == -1)
-        tprintf(", P");
-      tprintf(", %4.2f ", (double)segment_penalty_dict_punc_bad);
+
+  // Check which dawgs from the dawgs_ vector contain the word
+  // up to and including the current unichar.
+  if (checked_unigrams || (this->*letter_is_okay_)(
+      more_args, word->unichar_id(word_index), word_ending)) {
+    // Add a new word choice
+    if (word_ending) {
+      if (dawg_debug_level) {
+        tprintf("found word = %s\n", word->debug_string().string());
+      }
+      if (strcmp(output_ambig_words_file.string(), "") != 0) {
+        if (output_ambig_words_file_ == NULL) {
+          output_ambig_words_file_ =
+              fopen(output_ambig_words_file.string(), "wb+");
+          if (output_ambig_words_file_ == NULL) {
+            tprintf("Failed to open output_ambig_words_file %s\n",
+                    output_ambig_words_file.string());
+            exit(1);
+          }
+          STRING word_str;
+          word->string_and_lengths(&word_str, NULL);
+          word_str += " ";
+          fprintf(output_ambig_words_file_, "%s", word_str.string());
+        }
+        STRING word_str;
+        word->string_and_lengths(&word_str, NULL);
+        word_str += " ";
+        fprintf(output_ambig_words_file_, "%s", word_str.string());
+      }
+      WERD_CHOICE *adjusted_word = word;
+      adjusted_word->set_permuter(more_args->permuter);
+      update_best_choice(*adjusted_word, best_choice);
+    } else {  // search the next letter
+      // Make updated_* point to the next entries in the DawgPositionVector
+      // arrays (that were originally created in dawg_permute_and_select)
+      ++(more_args->updated_dawgs);
+      // Make active_dawgs and constraints point to the updated ones.
+      ++(more_args->active_dawgs);
+      permute_choices(debug, char_choices, char_choice_index + 1,
+                      prev_char_frag_info, word, certainties, limit,
+                      best_choice, attempts_left, more_args);
+      // Restore previous state to explore another letter in this position.
+      --(more_args->updated_dawgs);
+      --(more_args->active_dawgs);
+    }
+  } else {
+      if (dawg_debug_level) {
+        tprintf("last unichar not OK at index %d in %s\n",
+                word_index, word->debug_string().string());
     }
   }
-
-  class_rating (best_choice) -= RATING_PAD;
-
-  LogNewWordChoice(best_choice, adjust_factor,
-                   certainty_array, getUnicharset());
-
-  if (segment_adjust_debug)
-    tprintf(" --> %4.2f\n", class_rating (best_choice));
 }
 
 
-/**********************************************************************
- * append_next_choice
+/**
+ * dawg_permute_and_select
  *
- * Check to see whether or not the next choice is worth appending to
- * the string being generated.  If so then keep going deeper into the
- * word.
- **********************************************************************/
-void Dict::append_next_choice(  /*previous option */
-                              EDGE_ARRAY dawg,
-                              NODE_REF node,
-                              char permuter,
-                              char *word,
-                              char unichar_lengths[],
-                              int unichar_offsets[],
-                              CHOICES_LIST choices,
-                              int char_choice_index,
-                              int word_index,
-                              A_CHOICE *this_choice,
-                              const char *prevchar,
-                              float *limit,
-                              float rating,
-                              float certainty,
-                              float *rating_array,
-                              float *certainty_array,
-                              int word_ending,
-                              int last_word,
-                              const CHAR_FRAGMENT_INFO *prev_char_frag_info,
-                              char fragment_lengths[],
-                              CHOICES *result) {
-  A_CHOICE *better_choice;
-  CHAR_FRAGMENT_INFO char_frag_info;
-  const char *ch = NULL;
+ * Recursively explore all the possible character combinations in
+ * the given char_choices. Use go_deeper_dawg_fxn() to search all the
+ * dawgs in the dawgs_ vector in parallel and discard invalid words.
+ *
+ * Allocate and return a WERD_CHOICE with the best valid word found.
+ */
+WERD_CHOICE *Dict::dawg_permute_and_select(
+    const BLOB_CHOICE_LIST_VECTOR &char_choices, float rating_limit) {
+  WERD_CHOICE *best_choice = new WERD_CHOICE(&getUnicharset());
+  best_choice->make_bad();
+  best_choice->set_rating(rating_limit);
+  if (char_choices.length() == 0 || char_choices.length() > MAX_WERD_LENGTH)
+    return best_choice;
+  DawgPositionVector *active_dawgs =
+      new DawgPositionVector[char_choices.length() + 1];
+  init_active_dawgs(&(active_dawgs[0]), true);
+  DawgArgs dawg_args(&(active_dawgs[0]), &(active_dawgs[1]), NO_PERM);
+  WERD_CHOICE word(&getUnicharset(), MAX_WERD_LENGTH);
 
-  /* Deal with fragments */
-  if (!fragment_state_okay(
-      getUnicharset().unichar_to_id(class_string(this_choice)),
-      class_rating(this_choice), class_certainty(this_choice),
-      prev_char_frag_info,
-      (segment_dawg_debug && (fragments_debug > 1)) ? "dawg_debug" : NULL,
-      word_ending, &char_frag_info)) {
-    return;  // this_choice must be an invalid fragment
+  float certainties[MAX_WERD_LENGTH];
+  this->go_deeper_fxn_ = &tesseract::Dict::go_deeper_dawg_fxn;
+  int attempts_left = max_permuter_attempts;
+  permute_choices((dawg_debug_level) ? "permute_dawg_debug" : NULL,
+      char_choices, 0, NULL, &word, certainties, &rating_limit, best_choice,
+      &attempts_left, &dawg_args);
+  delete[] active_dawgs;
+  return best_choice;
+}
+
+/**
+ * permute_choices
+ *
+ * Call append_choices() for each BLOB_CHOICE in BLOB_CHOICE_LIST
+ * with the given char_choice_index in char_choices.
+ */
+void Dict::permute_choices(
+    const char *debug,
+    const BLOB_CHOICE_LIST_VECTOR &char_choices,
+    int char_choice_index,
+    const CHAR_FRAGMENT_INFO *prev_char_frag_info,
+    WERD_CHOICE *word,
+    float certainties[],
+    float *limit,
+    WERD_CHOICE *best_choice,
+    int *attempts_left,
+    void *more_args) {
+  if (debug) {
+    tprintf("%s permute_choices: char_choice_index=%d"
+            " limit=%g rating=%g, certainty=%g word=%s\n",
+            debug, char_choice_index, *limit, word->rating(),
+            word->certainty(), word->debug_string().string());
   }
-  if (char_frag_info.unichar_id != INVALID_UNICHAR_ID) {
-    ch = getUnicharset().id_to_unichar(char_frag_info.unichar_id);
+  if (char_choice_index < char_choices.length()) {
+    BLOB_CHOICE_IT blob_choice_it;
+    blob_choice_it.set_to_list(char_choices.get(char_choice_index));
+    for (blob_choice_it.mark_cycle_pt(); !blob_choice_it.cycled_list();
+         blob_choice_it.forward()) {
+      (*attempts_left)--;
+      append_choices(debug, char_choices, *(blob_choice_it.data()),
+                     char_choice_index, prev_char_frag_info, word,
+                     certainties, limit, best_choice, attempts_left, more_args);
+      if (*attempts_left <= 0) {
+        if (debug) tprintf("permute_choices(): attempts_left is 0\n");
+        break;
+      }
+    }
   }
-  if (ch == NULL) {   // this character is a fragment
-    JOIN_ON(*result,  // so search the next letter
-            dawg_permute(dawg, node, permuter, choices,
-                         char_choice_index + 1, word_index,
-                         limit, word, unichar_lengths, unichar_offsets,
-                         rating, certainty, rating_array, certainty_array,
-                         last_word, &char_frag_info, fragment_lengths));
+}
+
+/**
+ * append_choices
+ *
+ * Checks to see whether or not the next choice is worth appending to
+ * the word being generated. If so then keeps going deeper into the word.
+ *
+ * This function assumes that Dict::go_deeper_fxn_ is set.
+ */
+void Dict::append_choices(
+    const char *debug,
+    const BLOB_CHOICE_LIST_VECTOR &char_choices,
+    const BLOB_CHOICE &blob_choice,
+    int char_choice_index,
+    const CHAR_FRAGMENT_INFO *prev_char_frag_info,
+    WERD_CHOICE *word,
+    float certainties[],
+    float *limit,
+    WERD_CHOICE *best_choice,
+    int *attempts_left,
+    void *more_args) {
+  int word_ending =
+    (char_choice_index == char_choices.length() - 1) ? true : false;
+
+  // Deal with fragments.
+  CHAR_FRAGMENT_INFO char_frag_info;
+  if (!fragment_state_okay(blob_choice.unichar_id(), blob_choice.rating(),
+                           blob_choice.certainty(), prev_char_frag_info, debug,
+                           word_ending, &char_frag_info)) {
+    return;  // blob_choice must be an invalid fragment
+  }
+  // Search the next letter if this character is a fragment.
+  if (char_frag_info.unichar_id == INVALID_UNICHAR_ID) {
+    permute_choices(debug, char_choices, char_choice_index + 1,
+                    &char_frag_info, word, certainties, limit,
+                    best_choice, attempts_left, more_args);
     return;
   }
 
-  /* Add new character */
-  strcpy(word + unichar_offsets[word_index], ch);
+  // Add the next unichar.
+  float old_rating = word->rating();
+  float old_certainty = word->certainty();
+  uinT8 old_permuter = word->permuter();
+  certainties[word->length()] = char_frag_info.certainty;
+  word->append_unichar_id_space_allocated(
+      char_frag_info.unichar_id, char_frag_info.num_fragments,
+      char_frag_info.rating, char_frag_info.certainty);
 
-  unichar_lengths[word_index] = strlen(ch);
-  unichar_lengths[word_index + 1] = 0;
-  fragment_lengths[word_index] = char_frag_info.num_fragments;
-  fragment_lengths[word_index + 1] = 0;
-  unichar_offsets[word_index + 1] =
-    unichar_offsets[word_index] + unichar_lengths[word_index];
-  if (word[unichar_offsets[word_index]] == '\0') {
-    word[unichar_offsets[word_index]] = ' ';
-    word[unichar_offsets[word_index] + 1] = '\0';
-    unichar_lengths[word_index] = 1;
-    unichar_lengths[word_index + 1] = 0;
-    fragment_lengths[word_index] = 1;
-    fragment_lengths[word_index + 1] = 0;
-    unichar_offsets[word_index + 1] = unichar_offsets[word_index] +
-      unichar_lengths[word_index];
-  }
-  certainty_array[word_index] = char_frag_info.certainty;
-  rating += char_frag_info.rating;
-  certainty = MIN (char_frag_info.certainty, certainty);
+  // Explore the next unichar.
+  (this->*go_deeper_fxn_)(debug, char_choices, char_choice_index,
+                          &char_frag_info, word_ending, word, certainties,
+                          limit, best_choice, attempts_left, more_args);
 
-  /* Prune bad subwords */
-  if (rating_array[char_choice_index] == NO_RATING) {
-    rating_array[char_choice_index] = rating;
-  } else {
-    if (rating_array[word_index] * rating_margin + rating_pad < rating) {
-      if (segment_dawg_debug) {
-        tprintf("early pruned word rating=%4.2f, limit=%4.2f", rating, *limit);
-        print_word_string(word);
-        tprintf("\n");
-      }
-      return;
+  // Remove the unichar we added to explore other choices in it's place.
+  word->remove_last_unichar_id();
+  word->set_rating(old_rating);
+  word->set_certainty(old_certainty);
+  word->set_permuter(old_permuter);
+}
+
+/**
+ * @name fragment_state
+ *
+ * Given the current char choice and information about previously seen
+ * fragments, determines whether adjacent character fragments are
+ * present and whether they can be concatenated.
+ *
+ * The given prev_char_frag_info contains:
+ * - fragment: if not NULL contains information about immediately
+ *   preceeding fragmented character choice
+ * - num_fragments: number of fragments that have been used so far
+ *   to construct a character
+ * - certainty: certainty of the current choice or minimum
+ *   certainty of all fragments concatenated so far
+ * - rating: rating of the current choice or sum of fragment
+ *   ratings concatenated so far
+ *
+ * The output char_frag_info is filled in as follows:
+ * - character: is set to be NULL if the choice is a non-matching
+ *   or non-ending fragment piece; is set to unichar of the given choice
+ *   if it represents a regular character or a matching ending fragment
+ * - fragment,num_fragments,certainty,rating are set as described above
+ *
+ * @returns false if a non-matching fragment is discovered, true otherwise.
+ */
+bool Dict::fragment_state_okay(UNICHAR_ID curr_unichar_id,
+                               float curr_rating, float curr_certainty,
+                               const CHAR_FRAGMENT_INFO *prev_char_frag_info,
+                               const char *debug, int word_ending,
+                               CHAR_FRAGMENT_INFO *char_frag_info) {
+  const CHAR_FRAGMENT *this_fragment =
+    getUnicharset().get_fragment(curr_unichar_id);
+  const CHAR_FRAGMENT *prev_fragment =
+    prev_char_frag_info != NULL ? prev_char_frag_info->fragment : NULL;
+
+  // Print debug info for fragments.
+  if (debug && (prev_fragment || this_fragment)) {
+    tprintf("%s check fragments: choice=%s word_ending=%d\n", debug,
+            getUnicharset().debug_str(curr_unichar_id).string(),
+            word_ending);
+    if (prev_fragment) {
+      tprintf("prev_fragment %s\n", prev_fragment->to_string().string());
+    }
+    if (this_fragment) {
+      tprintf("this_fragment %s\n", this_fragment->to_string().string());
     }
   }
 
-  /* Deal with hyphens */
-  if (word_ending && last_word && word[unichar_offsets[word_index]] == '-' &&
-      word_index > 0) {
-    *limit = rating;
-    if (segment_dawg_debug)
-      tprintf("new hyphen choice = %s\n", word);
-    better_choice = new_choice (word, unichar_lengths, rating, certainty,
-                                -1, NULL, permuter, false, fragment_lengths);
-
-    adjust_word(better_choice, certainty_array);
-    push_on(*result, better_choice);
-    set_hyphen_word(word, unichar_lengths, unichar_offsets,
-                    rating, node, char_choice_index, fragment_lengths);
+  char_frag_info->unichar_id = curr_unichar_id;
+  char_frag_info->fragment = this_fragment;
+  char_frag_info->rating = curr_rating;
+  char_frag_info->certainty = curr_certainty;
+  char_frag_info->num_fragments = 1;
+  if (prev_fragment && !this_fragment) {
+    if (debug) tprintf("Skip choice with incomplete fragment\n");
+    return false;
   }
-  /* Look up char in DAWG */
-  else {
-    int sub_offset = 0;
-    NODE_REF node_saved = node;
-    while (sub_offset < unichar_lengths[word_index] &&
-           (this->*letter_is_okay_)(dawg, &node,
-                                    unichar_offsets[word_index] + sub_offset,
-                                    *prevchar, word, word_ending &&
-                                    sub_offset ==
-                                      unichar_lengths[word_index] - 1)) {
-      ++sub_offset;
-    }
-    if (sub_offset == unichar_lengths[word_index]) {
-      /* Add a new word choice */
-      if (word_ending) {
-        if (segment_dawg_debug == 1)
-          tprintf("new choice = %s\n", word);
-        *limit = rating;
-
-        better_choice =
-          new_choice (hyphen_tail (word), unichar_lengths + hyphen_base_size(),
-                      rating, certainty, -1, NULL, permuter, false,
-                      fragment_lengths + hyphen_base_size());
-        adjust_word (better_choice, &certainty_array[hyphen_base_size()]);
-        push_on(*result, better_choice);
+  if (this_fragment) {
+    // We are dealing with a fragment.
+    char_frag_info->unichar_id = INVALID_UNICHAR_ID;
+    if (prev_fragment) {
+      if (!this_fragment->is_continuation_of(prev_fragment)) {
+        if (debug) tprintf("Non-matching fragment piece\n");
+        return false;
       }
-      else {
-        /* Search the next letter */
-        JOIN_ON (*result,
-                 dawg_permute (dawg, node, permuter, choices,
-                               char_choice_index + 1, word_index + 1, limit,
-                               word, unichar_lengths, unichar_offsets, rating,
-                               certainty, rating_array, certainty_array,
-                               last_word, &char_frag_info, fragment_lengths));
+      if (this_fragment->is_ending()) {
+        char_frag_info->unichar_id =
+          getUnicharset().unichar_to_id(this_fragment->get_unichar());
+        char_frag_info->fragment = NULL;
+        if (debug) {
+          tprintf("Built character %s from fragments\n",
+                  getUnicharset().debug_str(
+                      char_frag_info->unichar_id).string());
+        }
+      } else {
+        if (debug) tprintf("Record fragment continuation\n");
+        char_frag_info->fragment = this_fragment;
       }
+      // Update certainty and rating.
+      char_frag_info->rating =
+        prev_char_frag_info->rating + curr_rating;
+      char_frag_info->num_fragments = prev_char_frag_info->num_fragments + 1;
+      char_frag_info->certainty =
+        MIN(curr_certainty, prev_char_frag_info->certainty);
     } else {
-      if (segment_dawg_debug == 1) {
-        tprintf("letter not OK at char %d, index %d + sub index %d/%d\n",
-                word_index, unichar_offsets[word_index],
-                sub_offset, unichar_lengths[word_index]);
-        tprintf("Word");
-        print_word_string(word);
-        tprintf("\nRejected tail");
-        print_word_string(word + unichar_offsets[word_index]);
-        tprintf("\n");
+      if (this_fragment->is_beginning()) {
+        if (debug) tprintf("Record fragment beginning\n");
+      } else {
+        if (debug) {
+          tprintf("Non-starting fragment piece with no prev_fragment\n");
+        }
+        return false;
       }
-      if (node != 0)
-        node = node_saved;
     }
   }
+  if (word_ending && char_frag_info->fragment) {
+    if (debug) tprintf("Word can not end with a fragment\n");
+    return false;
+  }
+  return true;
 }
 
-
-/**********************************************************************
- * dawg_permute
- *
- * Permute all the valid words that can be created with this starting
- * point.  The node (in the DAWG) and the word string define a base
- * from which to start adding the remaining character choices.
- **********************************************************************/
-CHOICES Dict::dawg_permute(EDGE_ARRAY dawg,
-                           NODE_REF node,
-                           char permuter,
-                           CHOICES_LIST choices,
-                           int char_choice_index,
-                           int word_index,
-                           float *limit,
-                           char *word,
-                           char unichar_lengths[],
-                           int unichar_offsets[],
-                           float rating,
-                           float certainty,
-                           float *rating_array,
-                           float *certainty_array,
-                           int last_word,
-                           const CHAR_FRAGMENT_INFO *prev_char_frag_info,
-                           char fragment_lengths[]) {
-  CHOICES result = NIL;
-  CHOICES c;
-  char *prevchar;
-  int word_ending = FALSE;
-
-  if (segment_dawg_debug) {
-    tprintf("dawg_permute (node=" REFFORMAT ", char_choice_index=%d,"
-            " word_index=%d, limit=%f, word=",
-            node, char_choice_index, word_index, *limit);
-    print_word_string(word);
-    tprintf(", rating=%4.2f, certainty=%4.2f)\n", rating, certainty);
-  }
-
-  /* Check for EOW */
-  if (1 + char_choice_index == array_count (choices) + hyphen_char_choice_size()) {
-    word_ending = TRUE;
-  }
-
-  if (char_choice_index < array_count (choices) + hyphen_char_choice_size()) {
-    prevchar = NULL;
-    iterate_list (c, (CHOICES) array_index (choices,
-        char_choice_index - hyphen_char_choice_size())) {
-      append_next_choice (dawg, node, permuter, word, unichar_lengths,
-                          unichar_offsets, choices, char_choice_index,
-                          word_index, (A_CHOICE *) first_node (c),
-                          prevchar != NULL ? prevchar : "", limit,
-                          rating, certainty, rating_array, certainty_array,
-                          word_ending, last_word, prev_char_frag_info,
-                          fragment_lengths, &result);
-      prevchar = best_string (c);
-    }
-  }
-
-  if (result && (segment_dawg_debug == 1))
-    print_choices ("dawg_permute", result);
-
-  return (result);
-}
-
-/**********************************************************************
- * dawg_permute_and_select
- *
- * Use a DAWG type data structure to enumerate all the valid strings
- * in some gramar.  Compare each of the choices against the best choice
- * so far.  Update the best choice if needed.
- **********************************************************************/
-void Dict::dawg_permute_and_select(const char *string,
-                                   EDGE_ARRAY dawg,
-                                   char permuter,
-                                   CHOICES_LIST character_choices,
-                                   A_CHOICE *best_choice,
-                                   inT16 system_words) {
-  CHOICES result = NIL;
-  char word[UNICHAR_LEN * MAX_WERD_LENGTH + 1];
-  char unichar_lengths[MAX_WERD_LENGTH + 1];
-  int unichar_offsets[MAX_WERD_LENGTH + 1];
-  float certainty_array[MAX_WERD_LENGTH + 1];
-  float rating_array[MAX_WERD_LENGTH + 1];
-  char fragment_lengths[MAX_WERD_LENGTH + 1];  // num fragments from which
-                                               // each char was constructed
-  float rating;
-  int char_choice_index = 0;
-  int word_index = 0;
-  NODE_REF dawg_node = 0;
-
-                                 /* Pruning margin ratio */
-  rating_margin = segment_penalty_dict_punc_bad / segment_penalty_dict_punc_ok;
-
-  word[0] = '\0';
-  unichar_lengths[0] = 0;
-  fragment_lengths[0] = 0;
-  unichar_offsets[0] = 0;
-  rating = class_rating (best_choice);
-
-  for (int i = 0; i < MAX_WERD_LENGTH + 1; ++i) {
-    rating_array[i] = NO_RATING;
-  }
-
-  if (!is_last_word () && hyphen_string) {
-    strcpy(word, hyphen_string);
-    strcpy(unichar_lengths, hyphen_unichar_lengths);
-    strcpy(fragment_lengths, hyphen_fragment_lengths);
-    memcpy(unichar_offsets, hyphen_unichar_offsets,
-           (hyphen_base_size()) * sizeof (int));
-    unichar_offsets[hyphen_base_size()] =
-        unichar_offsets[hyphen_base_size() - 1] +
-        unichar_lengths[hyphen_base_size() - 1];
-    char_choice_index = hyphen_char_choice_size();
-    word_index = strlen (hyphen_unichar_lengths);
-    if (system_words)
-      dawg_node = hyphen_state;
-  }
-
-  result = dawg_permute (dawg, dawg_node, permuter, character_choices,
-    char_choice_index, word_index, &rating, word, unichar_lengths,
-    unichar_offsets, 0.0, 0.0, rating_array, certainty_array,
-    is_last_word(), NULL, fragment_lengths);
-
-  if (display_ratings && result) {
-    print_choices(string, result);
-  }
-
-  while (result != NIL) {
-    if (best_rating (result) < class_rating (best_choice)) {
-      clone_choice (best_choice, (A_CHOICE *) first_node (result));
-    }
-    free_choice (first_node (result));
-    pop_off(result);
-  }
-}
-
-
-/**********************************************************************
- * init_permdawg
- *
- * Initialize the variables needed by this file.
- **********************************************************************/
-void Dict::init_permdawg() {
-  STRING name;
-  name = getImage()->getCCUtil()->language_data_path_prefix;
-  name += "freq-dawg";
-  frequent_words = read_squished_dawg(name.string());
-}
-
-void Dict::end_permdawg() {
-  memfree(frequent_words);
-  frequent_words = NULL;
-}
-
-
-/**********************************************************************
- * test_freq_words()
- *
- * Tests a word against the frequent word dawg
- **********************************************************************/
-int Dict::test_freq_words(const char *word) {
-  return (word_in_dawg (frequent_words, word));
-}
 }  // namespace tesseract

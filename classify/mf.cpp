@@ -18,11 +18,12 @@
 /**----------------------------------------------------------------------------
           Include Files and Type Defines
 ----------------------------------------------------------------------------**/
-#include "mfdefs.h"
-#include "variables.h"
 #include "mf.h"
-#include "fxdefs.h"
+
+#include "featdefs.h"
+#include "mfdefs.h"
 #include "mfx.h"
+
 #include <math.h>
 
 /**----------------------------------------------------------------------------
@@ -32,11 +33,13 @@
               Private Code
 ----------------------------------------------------------------------------**/
 /*---------------------------------------------------------------------------*/
-FEATURE_SET ExtractMicros(TBLOB *Blob, LINE_STATS *LineStats) {
+FEATURE_SET ExtractMicros(TBLOB *Blob, const DENORM& bl_denorm,
+                          const DENORM& cn_denorm,
+                          const INT_FX_RESULT_STRUCT& fx_info) {
 /*
  **	Parameters:
  **		Blob		blob to extract micro-features from
- **		LineStats	statistics on text row blob is in
+ **		denorm  control parameter to feature extractor.
  **	Globals: none
  **	Operation: Call the old micro-feature extractor and then copy
  **		the features into the new format.  Then deallocate the
@@ -51,7 +54,10 @@ FEATURE_SET ExtractMicros(TBLOB *Blob, LINE_STATS *LineStats) {
   FEATURE Feature;
   MICROFEATURE OldFeature;
 
-  OldFeatures = (MICROFEATURES) BlobMicroFeatures (Blob, LineStats);
+  OldFeatures = (MICROFEATURES)BlobMicroFeatures(Blob, bl_denorm, cn_denorm,
+                                                 fx_info);
+  if (OldFeatures == NULL)
+    return NULL;
   NumFeatures = count (OldFeatures);
   FeatureSet = NewFeatureSet (NumFeatures);
 
@@ -59,48 +65,25 @@ FEATURE_SET ExtractMicros(TBLOB *Blob, LINE_STATS *LineStats) {
   iterate(Features) {
     OldFeature = (MICROFEATURE) first_node (Features);
     Feature = NewFeature (&MicroFeatureDesc);
-    ParamOf (Feature, MFDirection) = OrientationOf (OldFeature);
-    ParamOf (Feature, MFXPosition) = CenterX (OldFeature);
-    ParamOf (Feature, MFYPosition) = CenterY (OldFeature);
-    ParamOf (Feature, MFLength) = LengthOf (OldFeature);
+    Feature->Params[MFDirection] = OldFeature[ORIENTATION];
+    Feature->Params[MFXPosition] = OldFeature[XPOSITION];
+    Feature->Params[MFYPosition] = OldFeature[YPOSITION];
+    Feature->Params[MFLength] = OldFeature[MFLENGTH];
 
-    // Bulge features should not be used
-    // anymore and are therefore set to 0.
-//     ParamOf (Feature, MFBulge1) = FirstBulgeOf (OldFeature);
-//     ParamOf (Feature, MFBulge2) = SecondBulgeOf (OldFeature);
-    ParamOf (Feature, MFBulge1) = 0.0f;
-    ParamOf (Feature, MFBulge2) = 0.0f;
+    // Bulge features are deprecated and should not be used.  Set to 0.
+    Feature->Params[MFBulge1] = 0.0f;
+    Feature->Params[MFBulge2] = 0.0f;
+
+#ifndef _WIN32
+    // Assert that feature parameters are well defined.
+    int i;
+    for (i = 0; i < Feature->Type->NumParams; i++) {
+      ASSERT_HOST(!isnan(Feature->Params[i]));
+    }
+#endif
 
     AddFeature(FeatureSet, Feature);
   }
   FreeMicroFeatures(OldFeatures);
-  return (FeatureSet);
-
+  return FeatureSet;
 }                                /* ExtractMicros */
-
-
-/*---------------------------------------------------------------------------*/
-void InitMicroFXVars() {
-/*
- **	Parameters: none
- **	Globals:
- **		ExtraPenaltyMagnitude	controls for adjusting extra penalty
- **		ExtraPenaltyWeight
- **		ExtraPenaltyOrder
- **	Operation: Initialize the microfeature extractor variables that can
- **		be tuned without recompiling.
- **	Return: none
- **	Exceptions: none
- **	History: Thu May 24 10:50:46 1990, DSJ, Created.
- */
-  /*
-     float_variable (ExtraPenaltyMagnitude, "MFExtraPenaltyMag",
-     EXTRA_PENALTY_MAGNITUDE);
-     float_variable (ExtraPenaltyWeight, "MFExtraPenaltyWeight",
-     EXTRA_PENALTY_WEIGHT);
-     float_variable (ExtraPenaltyOrder, "MFExtraPenaltyOrder",
-     EXTRA_PENALTY_ORDER);
-   */
-  InitMicroFxVars();
-
-}                                /* InitMicroFXVars */

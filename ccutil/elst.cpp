@@ -17,34 +17,8 @@
  *
  **********************************************************************/
 
-#include          "mfcpch.h"     //precompiled headers
 #include <stdlib.h>
 #include "elst.h"
-
-/***********************************************************************
- *  MEMBER FUNCTIONS OF CLASS: ELIST_LINK
- *  =====================================
- **********************************************************************/
-
-/***********************************************************************
- *							ELIST_LINK::serialise_asc
- *
- *  Generates an error as it should never be called.
- **********************************************************************/
-
-void ELIST_LINK::serialise_asc(  //default serialise
-                               FILE *f) {
-  SERIALISE_LINKS.error ("ELIST_LINK::serialise_asc", ABORT,
-    "Don't call this, override!");
-}
-
-
-void ELIST_LINK::de_serialise_asc(  //default de_serialise
-                                  FILE *f) {
-  SERIALISE_LINKS.error ("ELIST_LINK::de_serialise_asc", ABORT,
-    "Don't call this, override!");
-}
-
 
 /***********************************************************************
  *  MEMBER FUNCTIONS OF CLASS: ELIST
@@ -70,7 +44,7 @@ void (*zapper) (ELIST_LINK *)) {
   ELIST_LINK *ptr;
   ELIST_LINK *next;
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST::internal_clear", ABORT, NULL);
   #endif
@@ -86,36 +60,6 @@ void (*zapper) (ELIST_LINK *)) {
     }
   }
 }
-
-
-/***********************************************************************
- *							ELIST::internal_deep_copy
- *
- *  Used during explict deep copy of a list.  The "copier" function passed
- *  allows each element to be correctly deep copied (assuming that each class
- *  in the inheritance hierarchy does properly deep copies its members).  The
- *  function passing technique is as for "internal_clear".
- **********************************************************************/
-
-void
-                                 //ptr to copier functn
-ELIST::internal_deep_copy (ELIST_LINK * (*copier) (ELIST_LINK *),
-const ELIST * list) {            //list being copied
-  ELIST_ITERATOR from_it ((ELIST *) list);
-  ELIST_ITERATOR to_it(this);
-
-  #ifdef _DEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST::internal_deep_copy", ABORT, NULL);
-  if (!list)
-    BAD_PARAMETER.error ("ELIST::internal_deep_copy", ABORT,
-      "source list is NULL");
-  #endif
-
-  for (from_it.mark_cycle_pt (); !from_it.cycled_list (); from_it.forward ())
-    to_it.add_after_then_move (copier (from_it.data ()));
-}
-
 
 /***********************************************************************
  *							ELIST::assign_to_sublist
@@ -136,7 +80,7 @@ void ELIST::assign_to_sublist(                           //to this list
   const ERRCODE LIST_NOT_EMPTY =
     "Destination list must be empty before extracting a sublist";
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST::assign_to_sublist", ABORT, NULL);
   #endif
@@ -154,11 +98,11 @@ void ELIST::assign_to_sublist(                           //to this list
  *  Return count of elements on list
  **********************************************************************/
 
-inT32 ELIST::length() {  //count elements
-  ELIST_ITERATOR it(this);
+inT32 ELIST::length() const {  // count elements
+  ELIST_ITERATOR it(const_cast<ELIST*>(this));
   inT32 count = 0;
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST::length", ABORT, NULL);
   #endif
@@ -187,7 +131,7 @@ const void *, const void *)) {
   ELIST_LINK **current;
   inT32 i;
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST::sort", ABORT, NULL);
   #endif
@@ -215,91 +159,47 @@ const void *, const void *)) {
   free(base);
 }
 
-
-/***********************************************************************
- *							ELIST::prep_serialise
- *
- *  Replace the last member with a count of elements for serialisation.
- *  This is used on list objects which are members of objects being
- *  serialised.  The containing object has been shallow copied and this member
- *  function is invoked on the COPY.
- **********************************************************************/
-
-void ELIST::prep_serialise() {
-  ELIST_ITERATOR this_it(this);
-  inT32 count = 0;
-
-  #ifdef _DEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST::prep_serialise", ABORT, NULL);
-  #endif
-
-  count = 0;
-  if (!empty ())
-    for (this_it.mark_cycle_pt ();
-    !this_it.cycled_list (); this_it.forward ())
-  count++;
-  last = (ELIST_LINK *) count;
-}
-
-
-/***********************************************************************
- *							ELIST::internal_dump
- *
- *  Cause each element on the list to be serialised by walking the list and
- *  calling the element_serialiser function for each element.  The
- *  element_serialiser simply does the appropriate coercion of the element to
- *  its real type and then invokes the elements serialise function
- **********************************************************************/
-
-void
-ELIST::internal_dump (FILE * f,
-void element_serialiser (FILE *, ELIST_LINK *)) {
-  ELIST_ITERATOR this_it(this);
-
-  #ifdef _DEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST::internal_dump", ABORT, NULL);
-  #endif
-
-  if (!empty ())
-    for (this_it.mark_cycle_pt ();
-    !this_it.cycled_list (); this_it.forward ())
-  element_serialiser (f, this_it.data ());
-}
-
-
-/***********************************************************************
- *							ELIST::internal_de_dump
- *
- *  Cause each element on the list to be de_serialised by extracting the count
- *  of elements on the list, (held in the last member of the dumped version of
- *  the list object), and then de-serialising that number of list elements,
- *  adding each to the end of the reconstructed list.
- **********************************************************************/
-
-void
-ELIST::internal_de_dump (FILE * f,
-ELIST_LINK * element_de_serialiser (FILE *)) {
-  inT32 count = (ptrdiff_t) last;
-  ELIST_ITERATOR this_it;
-  ELIST_LINK *de_serialised_element;
-
-  #ifdef _DEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST::internal_de_dump", ABORT, NULL);
-  #endif
-
-  last = NULL;
-  this_it.set_to_list (this);
-  for (; count > 0; count--) {
-    de_serialised_element = element_de_serialiser (f);
-                                 //ignore old ptr
-    de_serialised_element->next = NULL;
-    this_it.add_to_end (de_serialised_element);
+// Assuming list has been sorted already, insert new_link to
+// keep the list sorted according to the same comparison function.
+// Comparision function is the same as used by sort, i.e. uses double
+// indirection. Time is O(1) to add to beginning or end.
+// Time is linear to add pre-sorted items to an empty list.
+// If unique is set to true and comparator() returns 0 (an entry with the
+// same information as the one contained in new_link is already in the
+// list) - new_link is not added to the list and the function returns the
+// pointer to the identical entry that already exists in the list
+// (otherwise the function returns new_link).
+ELIST_LINK *ELIST::add_sorted_and_find(
+    int comparator(const void*, const void*),
+    bool unique, ELIST_LINK* new_link) {
+  // Check for adding at the end.
+  if (last == NULL || comparator(&last, &new_link) < 0) {
+    if (last == NULL) {
+      new_link->next = new_link;
+    } else {
+      new_link->next = last->next;
+      last->next = new_link;
+    }
+    last = new_link;
+  } else {
+    // Need to use an iterator.
+    ELIST_ITERATOR it(this);
+    for (it.mark_cycle_pt(); !it.cycled_list(); it.forward()) {
+      ELIST_LINK* link = it.data();
+      int compare = comparator(&link, &new_link);
+      if (compare > 0) {
+        break;
+      } else if (unique && compare == 0) {
+        return link;
+      }
+    }
+    if (it.cycled_list())
+      it.add_to_end(new_link);
+    else
+      it.add_before_then_move(new_link);
   }
+  return new_link;
 }
-
 
 /***********************************************************************
  *  MEMBER FUNCTIONS OF CLASS: ELIST_ITERATOR
@@ -314,7 +214,7 @@ ELIST_LINK * element_de_serialiser (FILE *)) {
  **********************************************************************/
 
 ELIST_LINK *ELIST_ITERATOR::forward() {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST_ITERATOR::forward", ABORT, NULL);
   if (!list)
@@ -327,21 +227,21 @@ ELIST_LINK *ELIST_ITERATOR::forward() {
                                  //set previous
     prev = current;
     started_cycling = TRUE;
-  }
-  else {
+    // In case next is deleted by another iterator, get next from current.
+    current = current->next;
+  } else {
     if (ex_current_was_cycle_pt)
       cycle_pt = next;
+    current = next;
   }
-  current = next;
   next = current->next;
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!current)
     NULL_DATA.error ("ELIST_ITERATOR::forward", ABORT, NULL);
   if (!next)
     NULL_NEXT.error ("ELIST_ITERATOR::forward", ABORT,
-      "This is: %i  Current is: %i",
-      (int) this, (int) current);
+                     "This is: %p  Current is: %p", this, current);
   #endif
   return current;
 }
@@ -359,7 +259,7 @@ ELIST_LINK *ELIST_ITERATOR::data_relative(                //get data + or - ...
                                           inT8 offset) {  //offset from current
   ELIST_LINK *ptr;
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST_ITERATOR::data_relative", ABORT, NULL);
   if (!list)
@@ -376,7 +276,7 @@ ELIST_LINK *ELIST_ITERATOR::data_relative(                //get data + or - ...
   else
     for (ptr = current ? current : prev; offset-- > 0; ptr = ptr->next);
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!ptr)
     NULL_DATA.error ("ELIST_ITERATOR::data_relative", ABORT, NULL);
   #endif
@@ -394,7 +294,7 @@ ELIST_LINK *ELIST_ITERATOR::data_relative(                //get data + or - ...
  **********************************************************************/
 
 ELIST_LINK *ELIST_ITERATOR::move_to_last() {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST_ITERATOR::move_to_last", ABORT, NULL);
   if (!list)
@@ -425,7 +325,7 @@ void ELIST_ITERATOR::exchange(                             //positions of 2 link
 
   ELIST_LINK *old_current;
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST_ITERATOR::exchange", ABORT, NULL);
   if (!list)
@@ -520,7 +420,7 @@ void ELIST_ITERATOR::exchange(                             //positions of 2 link
 
 ELIST_LINK *ELIST_ITERATOR::extract_sublist(                             //from this current
                                             ELIST_ITERATOR *other_it) {  //to other current
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   const ERRCODE BAD_EXTRACTION_PTS =
     "Can't extract sublist from points on different lists";
   const ERRCODE DONT_EXTRACT_DELETED =
@@ -531,7 +431,7 @@ ELIST_LINK *ELIST_ITERATOR::extract_sublist(                             //from 
   ELIST_ITERATOR temp_it = *this;
   ELIST_LINK *end_of_new_list;
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("ELIST_ITERATOR::extract_sublist", ABORT, NULL);
   if (!other_it)

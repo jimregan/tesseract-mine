@@ -1,8 +1,8 @@
 /**********************************************************************
  * File:        polyaprx.cpp  (Formerly polygon.c)
  * Description: Code for polygonal approximation from old edgeprog.
- * Author:		Ray Smith
- * Created:		Thu Nov 25 11:42:04 GMT 1993
+ * Author:      Ray Smith
+ * Created:     Thu Nov 25 11:42:04 GMT 1993
  *
  * (C) Copyright 1993, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,92 +17,92 @@
  *
  **********************************************************************/
 
-#include "mfcpch.h"
 #include          <stdio.h>
 #ifdef __UNIX__
 #include          <assert.h>
 #endif
-//#include                                                      "edgeloop.h"
-#define MAXEDGELENGTH    16000   //must replace
+#define FASTEDGELENGTH    256
 #include          "polyaprx.h"
-#include          "varable.h"
+#include          "params.h"
 #include          "tprintf.h"
 
 #define EXTERN
 
-EXTERN BOOL_VAR (poly_debug, FALSE, "Debug old poly");
-EXTERN BOOL_VAR (poly_wide_objects_better, TRUE,
-"More accurate approx on wide things");
+EXTERN BOOL_VAR(poly_debug, FALSE, "Debug old poly");
+EXTERN BOOL_VAR(poly_wide_objects_better, TRUE,
+                "More accurate approx on wide things");
 
-static int par1, par2;
-
-#define CONVEX        1          /*OUTLINE point is convex */
-#define CONCAVE       2          /*used and set only in edges */
 #define FIXED       4            /*OUTLINE point is fixed */
-#define ONHULL        8          /*on convex hull */
 
 #define RUNLENGTH     1          /*length of run */
 
 #define DIR         2            /*direction of run */
 
-#define CORRECTION      3        /*correction of run */
-//#define MAXSHORT                      32767                                           /*max value of short*/
 #define FLAGS       0
 
 #define fixed_dist      20       //really an int_variable
 #define approx_dist     15       //really an int_variable
 
-#define point_diff(p,p1,p2) (p).x = (p1).x - (p2).x ; (p).y = (p1).y - (p2).y
-#define CROSS(a,b) ((a).x * (b).y - (a).y * (b).x)
-#define LENGTH(a) ((a).x * (a).x + (a).y * (a).y)
+const int par1 = 4500 / (approx_dist * approx_dist);
+const int par2 = 6750 / (approx_dist * approx_dist);
 
-#define DISTANCE(a,b) (((b).x-(a).x) * ((b).x-(a).x) \
-						+ ((b).y-(a).y) * ((b).y-(a).y))
 
 /**********************************************************************
  * tesspoly_outline
  *
- * Approximate an outline from c form using the old tess algorithm.
+ * Approximate an outline from chain codes form using the old tess algorithm.
+ * If allow_detailed_fx is true, the EDGEPTs in the returned TBLOB
+ * contain pointers to the input C_OUTLINEs that enable higher-resolution
+ * feature extraction that does not use the polygonal approximation.
  **********************************************************************/
 
-OUTLINE *tesspoly_outline(                       //old approximation
-                          C_OUTLINE *c_outline,  //input
-                          float                  //xheight
-                         ) {
-  EDGEPT *edgept;                //converted steps
-  EDGEPT *startpt;               //start of outline
-  TBOX loop_box;                  //bounding box
-  inT32 area;                    //loop area
-  FCOORD pos;                    //vertex
-  FCOORD vec;                    //vector
-  POLYPT_LIST polypts;           //output polygon
-  POLYPT *polypt;                //converted point
-  POLYPT_IT poly_it = &polypts;  //iterator
-  EDGEPT edgepts[MAXEDGELENGTH]; //converted path
 
-  loop_box = c_outline->bounding_box ();
-  area = loop_box.height ();
-  if (!poly_wide_objects_better && loop_box.width () > area)
-    area = loop_box.width ();
+TESSLINE* ApproximateOutline(bool allow_detailed_fx, C_OUTLINE* c_outline) {
+  EDGEPT *edgept;                // converted steps
+  TBOX loop_box;                  // bounding box
+  inT32 area;                    // loop area
+  EDGEPT stack_edgepts[FASTEDGELENGTH];  // converted path
+  EDGEPT* edgepts = stack_edgepts;
+
+  // Use heap memory if the stack buffer is not big enough.
+  if (c_outline->pathlength() > FASTEDGELENGTH)
+    edgepts = new EDGEPT[c_outline->pathlength()];
+
+  loop_box = c_outline->bounding_box();
+  area = loop_box.height();
+  if (!poly_wide_objects_better && loop_box.width() > area)
+    area = loop_box.width();
   area *= area;
-  edgept = edgesteps_to_edgepts (c_outline, edgepts);
+  edgept = edgesteps_to_edgepts(c_outline, edgepts);
   fix2(edgepts, area);
-  edgept = poly2 (edgepts, area);/*2nd approximation */
-  startpt = edgept;
+  edgept = poly2 (edgepts, area);  // 2nd approximation.
+  EDGEPT* startpt = edgept;
+  EDGEPT* result = NULL;
+  EDGEPT* prev_result = NULL;
   do {
-    pos = FCOORD (edgept->pos.x, edgept->pos.y);
-    vec = FCOORD (edgept->vec.x, edgept->vec.y);
-    polypt = new POLYPT (pos, vec);
-                                 //add to list
-    poly_it.add_after_then_move (polypt);
+    EDGEPT* new_pt = new EDGEPT;
+    new_pt->pos = edgept->pos;
+    new_pt->prev = prev_result;
+    if (prev_result == NULL) {
+      result = new_pt;
+    } else {
+      prev_result->next = new_pt;
+      new_pt->prev = prev_result;
+    }
+    if (allow_detailed_fx) {
+      new_pt->src_outline = edgept->src_outline;
+      new_pt->start_step = edgept->start_step;
+      new_pt->step_count = edgept->step_count;
+    }
+    prev_result = new_pt;
     edgept = edgept->next;
   }
   while (edgept != startpt);
-  if (poly_it.length () <= 2)
-    return NULL;
-  else
-                                 //turn to outline
-      return new OUTLINE (&poly_it);
+  prev_result->next = result;
+  result->prev = prev_result;
+  if (edgepts != stack_edgepts)
+    delete [] edgepts;
+  return TESSLINE::BuildFromOutlineList(result);
 }
 
 
@@ -135,6 +135,7 @@ EDGEPT edgepts[]                 //output is array
   epindex = 0;
   prevdir = -1;
   count = 0;
+  int prev_stepindex = 0;
   do {
     dir = c_outline->step_dir (stepindex);
     vec = c_outline->step (stepindex);
@@ -166,10 +167,14 @@ EDGEPT edgepts[]                 //output is array
       epdir >>= 4;
       epdir &= 7;
       edgepts[epindex].flags[DIR] = epdir;
+      edgepts[epindex].src_outline = c_outline;
+      edgepts[epindex].start_step = prev_stepindex;
+      edgepts[epindex].step_count = stepindex - prev_stepindex;
       epindex++;
       prevdir = dir;
       prev_vec = vec;
       count = 1;
+      prev_stepindex = stepindex;
     }
     else
       count++;
@@ -184,6 +189,9 @@ EDGEPT edgepts[]                 //output is array
   pos += prev_vec;
   edgepts[epindex].flags[RUNLENGTH] = count;
   edgepts[epindex].flags[FLAGS] = 0;
+  edgepts[epindex].src_outline = c_outline;
+  edgepts[epindex].start_step = prev_stepindex;
+  edgepts[epindex].step_count = stepindex - prev_stepindex;
   edgepts[epindex].prev = &edgepts[epindex - 1];
   edgepts[epindex].next = &edgepts[0];
   prevdir += 64;
@@ -344,6 +352,11 @@ void fix2(                //polygonal approx
       break;                     //already too few
     point_diff (d12vec, edgefix1->pos, edgefix2->pos);
     d12 = LENGTH (d12vec);
+    // TODO(rays) investigate this change:
+    // Only unfix a point if it is part of a low-curvature section
+    // of outline and the total angle change of the outlines is
+    // less than 90 degrees, ie the scalar product is positive.
+    // if (d12 <= gapmin && SCALAR(edgefix0->vec, edgefix2->vec) > 0) {
     if (d12 <= gapmin) {
       point_diff (d01vec, edgefix0->pos, edgefix1->pos);
       d01 = LENGTH (d01vec);
@@ -352,16 +365,10 @@ void fix2(                //polygonal approx
       if (d01 > d23) {
         edgefix2->flags[FLAGS] &= ~FIXED;
         fixed_count--;
-        /*					if ( plots[EDGE] & PATHS )
-                  mark(edgefd,edgefix2->pos.x,edgefix2->pos.y,PLUS);
-                                  */
       }
       else {
         edgefix1->flags[FLAGS] &= ~FIXED;
         fixed_count--;
-        /*					if ( plots[EDGE] & PATHS )
-                  mark(edgefd,edgefix1->pos.x,edgefix1->pos.y,PLUS);
-                                    */
         edgefix1 = edgefix2;
       }
     }
@@ -401,11 +408,6 @@ EDGEPT *poly2(                  //second poly
 
   if (area < 1200)
     area = 1200;                 /*minimum value */
-
-                                 /*1200(4) */
-  par1 = 4500 / (approx_dist * approx_dist);
-                                 /*1200(6) */
-  par2 = 6750 / (approx_dist * approx_dist);
 
   loopstart = NULL;              /*not found it yet */
   edgept = startpt;              /*start of loop */

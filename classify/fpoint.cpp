@@ -27,6 +27,15 @@
               Public Code
 ----------------------------------------------------------------------------**/
 /*---------------------------------------------------------------------------*/
+
+FLOAT32 DistanceBetween(FPOINT A, FPOINT B) {
+  double xd = XDelta(A, B);
+  double yd = YDelta(A, B);
+  return sqrt(static_cast<double>(xd * xd + yd * yd));
+}
+
+
+
 FLOAT32 NormalizedAngleFrom(FPOINT *Point1,
                             FPOINT *Point2,
                             FLOAT32 FullScale) {

@@ -21,8 +21,7 @@
 #define RUNMAIN_H
 
 #include          "host.h"
-#include          "varable.h"
-#include          "notdll.h"     //must be last include
+#include          "params.h"
 
 #define DECLARE_MAIN(ARGC,ARGV)\
 STRING_VAR(init_config_file,"config","Config file to read on startup");\

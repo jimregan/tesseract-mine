@@ -25,9 +25,6 @@
 #include "matchdefs.h"
 #include "xform2d.h"
 
-/* maximum size of a bulge for length=1 is sqrt(2)/3 */
-#define BULGENORMALIZER   0.942809041
-
 /* definition of a list of micro-features */
 typedef LIST MICROFEATURES;
 
@@ -47,13 +44,6 @@ typedef FLOAT32 *MICROFEATURE;
 /**----------------------------------------------------------------------------
             Macros
 ----------------------------------------------------------------------------**/
-/* macros for accessing micro-feature parameters */
-#define CenterX(M)    ( (M)[XPOSITION] )
-#define CenterY(M)    ( (M)[YPOSITION] )
-#define LengthOf(M)   ( (M)[MFLENGTH] )
-#define OrientationOf(M)  ( (M)[ORIENTATION] )
-#define FirstBulgeOf(M)   ( (M)[FIRSTBULGE] )
-#define SecondBulgeOf(M)  ( (M)[SECONDBULGE] )
 
 /* macros for accessing micro-feature lists */
 #define NextFeatureOf(L)  ( (MICROFEATURE) first_node ( L ) )

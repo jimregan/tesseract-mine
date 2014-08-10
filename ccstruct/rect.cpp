@@ -17,8 +17,12 @@
  *
  **********************************************************************/
 
-#include          "mfcpch.h"     //precompiled headers
 #include          "rect.h"
+
+// Include automatically generated configuration file if running autoconf.
+#ifdef HAVE_CONFIG_H
+#include "config_auto.h"
+#endif
 
 /**********************************************************************
  * TBOX::TBOX()  Constructor from 2 ICOORDS
@@ -51,6 +55,29 @@ TBOX::TBOX(                   //construtor
   }
 }
 
+/**********************************************************************
+ * TBOX::TBOX()  Constructor from 4 integer values.
+ *  Note: It is caller's responsibility to provide values in the right
+ *        order.
+ **********************************************************************/
+
+TBOX::TBOX(                    //constructor
+    inT16 left, inT16 bottom, inT16 right, inT16 top)
+    : bot_left(left, bottom), top_right(right, top) {
+}
+
+// rotate_large constructs the containing bounding box of all 4
+// corners after rotating them. It therefore guarantees that all
+// original content is contained within, but also slightly enlarges the box.
+void TBOX::rotate_large(const FCOORD& vec) {
+  ICOORD top_left(bot_left.x(), top_right.y());
+  ICOORD bottom_right(top_right.x(), bot_left.y());
+  top_left.rotate(vec);
+  bottom_right.rotate(vec);
+  rotate(vec);
+  TBOX box2(top_left, bottom_right);
+  *this += box2;
+}
 
 /**********************************************************************
  * TBOX::intersection()  Build the largest box contained in both boxes
@@ -59,37 +86,38 @@ TBOX::TBOX(                   //construtor
 
 TBOX TBOX::intersection(  //shared area box
                       const TBOX &box) const {
-  ICOORD bl;                     //bottom left
-  ICOORD tr;                     //top right
-
+  inT16 left;
+  inT16 bottom;
+  inT16 right;
+  inT16 top;
   if (overlap (box)) {
     if (box.bot_left.x () > bot_left.x ())
-      bl.set_x (box.bot_left.x ());
+      left = box.bot_left.x ();
     else
-      bl.set_x (bot_left.x ());
+      left = bot_left.x ();
 
     if (box.top_right.x () < top_right.x ())
-      tr.set_x (box.top_right.x ());
+      right = box.top_right.x ();
     else
-      tr.set_x (top_right.x ());
+      right = top_right.x ();
 
     if (box.bot_left.y () > bot_left.y ())
-      bl.set_y (box.bot_left.y ());
+      bottom = box.bot_left.y ();
     else
-      bl.set_y (bot_left.y ());
+      bottom = bot_left.y ();
 
     if (box.top_right.y () < top_right.y ())
-      tr.set_y (box.top_right.y ());
+      top = box.top_right.y ();
     else
-      tr.set_y (top_right.y ());
+      top = top_right.y ();
   }
   else {
-    bl.set_x (MAX_INT16);
-    bl.set_y (MAX_INT16);
-    tr.set_x (-MAX_INT16);
-    tr.set_y (-MAX_INT16);
+    left = MAX_INT16;
+    bottom = MAX_INT16;
+    top = -MAX_INT16;
+    right = -MAX_INT16;
   }
-  return TBOX (bl, tr);
+  return TBOX (left, bottom, right, top);
 }
 
 
@@ -143,6 +171,29 @@ void TBOX::plot(                      //paint box
 }
 #endif
 
+// Appends the bounding box as (%d,%d)->(%d,%d) to a STRING.
+void TBOX::print_to_str(STRING *str) const {
+  // "(%d,%d)->(%d,%d)", left(), bottom(), right(), top()
+  str->add_str_int("(", left());
+  str->add_str_int(",", bottom());
+  str->add_str_int(")->(", right());
+  str->add_str_int(",", top());
+  *str += ')';
+}
+
+// Writes to the given file. Returns false in case of error.
+bool TBOX::Serialize(FILE* fp) const {
+  if (!bot_left.Serialize(fp)) return false;
+  if (!top_right.Serialize(fp)) return false;
+  return true;
+}
+// Reads from the given file. Returns false in case of error.
+// If swap is true, assumes a big/little-endian swap is needed.
+bool TBOX::DeSerialize(bool swap, FILE* fp) {
+  if (!bot_left.DeSerialize(swap, fp)) return false;
+  if (!top_right.DeSerialize(swap, fp)) return false;
+  return true;
+}
 
 /**********************************************************************
  * operator+=
@@ -171,15 +222,12 @@ const TBOX & op2) {
 
 
 /**********************************************************************
- * operator-=
+ * operator&=
  *
  * Reduce one box to intersection with the other  (In place intersection)
  **********************************************************************/
 
-DLLSYM TBOX &
-operator-= (                     //inplace intersection
-TBOX & op1,                       //operands
-const TBOX & op2) {
+TBOX& operator&=(TBOX& op1, const TBOX& op2) {
   if (op1.overlap (op2)) {
     if (op2.bot_left.x () > op1.bot_left.x ())
       op1.bot_left.set_x (op2.bot_left.x ());
@@ -202,28 +250,14 @@ const TBOX & op2) {
   return op1;
 }
 
-
-/**********************************************************************
- * TBOX::serialise_asc()  Convert to ascii file.
- *
- **********************************************************************/
-
-void TBOX::serialise_asc(         //convert to ascii
-                        FILE *f  //file to use
-                       ) {
-  bot_left.serialise_asc (f);
-  top_right.serialise_asc (f);
+bool TBOX::x_almost_equal(const TBOX &box, int tolerance) const {
+  return (abs(left() - box.left()) <= tolerance &&
+           abs(right() - box.right()) <= tolerance);
 }
 
-
-/**********************************************************************
- * TBOX::de_serialise_asc()  Convert from ascii file.
- *
- **********************************************************************/
-
-void TBOX::de_serialise_asc(         //convert from ascii
-                           FILE *f  //file to use
-                          ) {
-  bot_left.de_serialise_asc (f);
-  top_right.de_serialise_asc (f);
+bool TBOX::almost_equal(const TBOX &box, int tolerance) const {
+  return (abs(left() - box.left()) <= tolerance &&
+          abs(right() - box.right()) <= tolerance &&
+          abs(top() - box.top()) <= tolerance &&
+          abs(bottom() - box.bottom()) <= tolerance);
 }

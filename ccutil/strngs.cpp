@@ -17,85 +17,18 @@
  *
  **********************************************************************/
 
-#include          "mfcpch.h"     //precompiled headers
+#include          "helpers.h"
 #include          "tprintf.h"
 #include          "strngs.h"
+#include          "genericvector.h"
 
-/**********************************************************************
- * DataCache for reducing initial allocations, such as the default
- * constructor. The memory in this cache is not special, it is just
- * held locally rather than freeing. Only blocks with the default
- * capacity are considered for the cache.
- *
- * In practice it does not appear that this cache grows very big,
- * so even 2-4 elements are probably sufficient to realize most
- * gains.
- *
- * The cache is maintained globally with a global destructor to
- * avoid memory leaks being reported on exit.
- **********************************************************************/
-// kDataCacheSize is cache of last n min sized buffers freed for
-// cheap recyling
-const int kDataCacheSize = 8;  // max number of buffers cached
-
-#if 1
-#define CHECK_INVARIANT(s)  // EMPTY
-#else
-static void check_used_(int len, const char *s) {
-  bool ok;
-
-  if (len == 0)
-    ok = (s == NULL);
-  else
-    ok = (len == (strlen(s) + 1));
-
-  if (!ok)
-    abort();
-}
-
-#define CHECK_INVARIANT(s)  check_used_(s->GetHeader()->used_, s->string())
-#endif
-
-// put recycled buffers into a class so we can destroy it on exit
-class DataCache {
- public:
-  DataCache() {
-    top_ = 0;
-  }
-  ~DataCache() {
-    while (--top_ >= 0)
-        free_string((char *)stack_[top_]);
-  }
-
-  // Allocate a buffer out of this cache.
-  // Returs NULL if there are no cached buffers.
-  // The buffers in the cache can be freed using string_free.
-  void* alloc() {
-    if (top_ == 0)
-      return NULL;
-
-    return stack_[--top_];
-  }
-
-  // Free pointer either by caching it on the stack of pointers
-  // or freeing it with string_free if there isnt space left to cache it.
-  // s should have capacity kMinCapacity.
-  void free(void* p) {
-    if (top_ == kDataCacheSize)
-      free_string((char *)p);
-    else
-      stack_[top_++] = p;
-  }
-
-  // Stack of discarded but not-yet freed pointers.
-  void* stack_[kDataCacheSize];
-
-  // Top of stack, points to element after last cached pointer
-  int   top_;
-};
-
-static DataCache MinCapacityDataCache;
-
+#include <assert.h>
+// Size of buffer needed to host the decimal representation of the maximum
+// possible length of an int (in 64 bits), being -<20 digits>.
+const int kMaxIntSize = 22;
+// Size of buffer needed to host the decimal representation of the maximum
+// possible length of a %.8g being -0.12345678e+999<nul> = 15.
+const int kMaxDoubleSize = 15;
 
 /**********************************************************************
  * STRING_HEADER provides metadata about the allocated buffer,
@@ -114,9 +47,7 @@ static DataCache MinCapacityDataCache;
 const int kMinCapacity = 16;
 
 char* STRING::AllocData(int used, int capacity) {
-  if ((capacity != kMinCapacity)
-      || ((data_ = (STRING_HEADER *)MinCapacityDataCache.alloc()) == NULL))
-    data_ = (STRING_HEADER *)alloc_string(capacity + sizeof(STRING_HEADER));
+  data_ = (STRING_HEADER *)alloc_string(capacity + sizeof(STRING_HEADER));
 
   // header is the metadata for this memory block
   STRING_HEADER* header = GetHeader();
@@ -126,11 +57,7 @@ char* STRING::AllocData(int used, int capacity) {
 }
 
 void STRING::DiscardData() {
-  STRING_HEADER* header = GetHeader();
-  if (header->capacity_ == kMinCapacity)
-    MinCapacityDataCache.free(data_);
-  else
-    free_string((char *)data_);
+  free_string((char *)data_);
 }
 
 // This is a private method; ensure FixHeader is called (or used_ is well defined)
@@ -157,7 +84,7 @@ char* STRING::ensure_cstr(inT32 min_capacity) {
   DiscardData();
   data_ = new_header;
 
-  CHECK_INVARIANT(this);
+  assert(InvariantOk());
   return ((char *)data_) + sizeof(STRING_HEADER);
 }
 
@@ -171,8 +98,8 @@ void STRING::FixHeader() const {
 
 
 STRING::STRING() {
-  // 0 indicates old NULL -- it doesnt even have '\0'
-  AllocData(0, kMinCapacity);
+  // Empty STRINGs contain just the "\0".
+  memcpy(AllocData(1, kMinCapacity), "", 1);
 }
 
 STRING::STRING(const STRING& str) {
@@ -181,22 +108,42 @@ STRING::STRING(const STRING& str) {
   int   str_used  = str_header->used_;
   char *this_cstr = AllocData(str_used, str_used);
   memcpy(this_cstr, str.GetCStr(), str_used);
-  CHECK_INVARIANT(this);
+  assert(InvariantOk());
 }
 
 STRING::STRING(const char* cstr) {
   if (cstr == NULL) {
-    AllocData(0, 0);
+    // Empty STRINGs contain just the "\0".
+    memcpy(AllocData(1, kMinCapacity), "", 1);
   } else {
     int len = strlen(cstr) + 1;
     char* this_cstr = AllocData(len, len);
     memcpy(this_cstr, cstr, len);
   }
-  CHECK_INVARIANT(this);
+  assert(InvariantOk());
 }
 
 STRING::~STRING() {
   DiscardData();
+}
+
+// Writes to the given file. Returns false in case of error.
+bool STRING::Serialize(FILE* fp) const {
+  inT32 len = length();
+  if (fwrite(&len, sizeof(len), 1, fp) != 1) return false;
+  if (static_cast<int>(fwrite(GetCStr(), 1, len, fp)) != len) return false;
+  return true;
+}
+// Reads from the given file. Returns false in case of error.
+// If swap is true, assumes a big/little-endian swap is needed.
+bool STRING::DeSerialize(bool swap, FILE* fp) {
+  inT32 len;
+  if (fread(&len, sizeof(len), 1, fp) != 1) return false;
+  if (swap)
+    ReverseN(&len, sizeof(len));
+  truncate_at(len);
+  if (static_cast<int>(fread(GetCStr(), 1, len, fp)) != len) return false;
+  return true;
 }
 
 BOOL8 STRING::contains(const char c) const {
@@ -217,6 +164,10 @@ const char* STRING::string() const {
   // cast away the const and mutate the string directly.
   header->used_ = -1;
   return GetCStr();
+}
+
+const char* STRING::c_str() const {
+  return string();
 }
 
 /******
@@ -261,7 +212,7 @@ void STRING::insert_range(inT32 index, const char* str, int len) {
   memcpy(this_cstr + index, str, len);
   this_header->used_ += len;
 
-  CHECK_INVARIANT(this);
+  assert(InvariantOk());
 }
 
 void STRING::erase_range(inT32 index, int len) {
@@ -271,17 +222,19 @@ void STRING::erase_range(inT32 index, int len) {
   memcpy(this_cstr+index, this_cstr+index+len,
          this_header->used_ - index - len);
   this_header->used_ -= len;
-  CHECK_INVARIANT(this);
-}
-
-void STRING::truncate_at(inT32 index) {
-  char* this_cstr = ensure_cstr(index);
-  this_cstr[index] = '\0';
-  GetHeader()->used_ = index;
-  CHECK_INVARIANT(this);
+  assert(InvariantOk());
 }
 
 #else
+void STRING::truncate_at(inT32 index) {
+  ASSERT_HOST(index >= 0);
+  FixHeader();
+  char* this_cstr = ensure_cstr(index + 1);
+  this_cstr[index] = '\0';
+  GetHeader()->used_ = index + 1;
+  assert(InvariantOk());
+}
+
 char& STRING::operator[](inT32 index) const {
   // Code is casting away this const and mutating the string,
   // so mark used_ as -1 to flag it unreliable.
@@ -289,6 +242,26 @@ char& STRING::operator[](inT32 index) const {
   return ((char *)GetCStr())[index];
 }
 #endif
+
+void STRING::split(const char c, GenericVector<STRING> *splited) {
+  int start_index = 0;
+  for (int i = 0; i < length(); i++) {
+    if ((*this)[i] == c) {
+      if (i != start_index) {
+        (*this)[i] = '\0';
+        STRING tmp = GetCStr() + start_index;
+        splited->push_back(tmp);
+        (*this)[i] = c;
+      }
+      start_index = i + 1;
+    }
+  }
+
+  if (length() != start_index) {
+    STRING tmp = GetCStr() + start_index;
+    splited->push_back(tmp);
+  }
+}
 
 BOOL8 STRING::operator==(const STRING& str) const {
   FixHeader();
@@ -339,7 +312,7 @@ STRING& STRING::operator=(const STRING& str) {
   memcpy(this_cstr, str.GetCStr(), str_used);
   this_header->used_ = str_used;
 
-  CHECK_INVARIANT(this);
+  assert(InvariantOk());
   return *this;
 }
 
@@ -362,40 +335,29 @@ STRING & STRING::operator+=(const STRING& str) {
     this_header->used_ = str_used;
   }
 
-  CHECK_INVARIANT(this);
+  assert(InvariantOk());
   return *this;
 }
 
-void STRING::prep_serialise() {
-  // WARNING
-  // This method should only be called on a shallow bitwise copy
-  // by the serialise() method (see serialis.h).
-  FixHeader();
-  data_ = (STRING_HEADER *)GetHeader()->used_;
+void STRING::add_str_int(const char* str, int number) {
+  if (str != NULL)
+    *this += str;
+  // Allow space for the maximum possible length of inT64.
+  char num_buffer[kMaxIntSize];
+  snprintf(num_buffer, kMaxIntSize - 1, "%d", number);
+  num_buffer[kMaxIntSize - 1] = '\0';
+  *this += num_buffer;
 }
-
-
-void STRING::dump(FILE* f) {
-  FixHeader();
-  serialise_bytes (f, data_, GetHeader()->used_);
+// Appends the given string and double (as a %.8g) to this.
+void STRING::add_str_double(const char* str, double number) {
+  if (str != NULL)
+    *this += str;
+  // Allow space for the maximum possible length of %8g.
+  char num_buffer[kMaxDoubleSize];
+  snprintf(num_buffer, kMaxDoubleSize - 1, "%.8g", number);
+  num_buffer[kMaxDoubleSize - 1] = '\0';
+  *this += num_buffer;
 }
-
-void STRING::de_dump(FILE* f) {
-  char *instring;            //input from read
-  fprintf(stderr, "de_dump\n");
-  instring = (char *)de_serialise_bytes(f, (ptrdiff_t)data_);
-  int len = strlen(instring) + 1;
-
-  char* this_cstr = AllocData(len, len);
-  STRING_HEADER* this_header = GetHeader();
-
-  memcpy(this_cstr, instring, len);
-  this_header->used_ = len;
-
-  free_mem(instring);
-  CHECK_INVARIANT(this);
-}
-
 
 STRING & STRING::operator=(const char* cstr) {
   STRING_HEADER* this_header = GetHeader();
@@ -407,23 +369,35 @@ STRING & STRING::operator=(const char* cstr) {
     this_header = GetHeader();  // for realloc
     memcpy(this_cstr, cstr, len);
     this_header->used_ = len;
-  }
-  else {
-    // preserve old behavior
-    *GetCStr() = '\0';
-    this_header->used_ = 1;
+  } else {
+    // Reallocate to same state as default constructor.
+    DiscardData();
+    // Empty STRINGs contain just the "\0".
+    memcpy(AllocData(1, kMinCapacity), "", 1);
   }
 
-  CHECK_INVARIANT(this);
+  assert(InvariantOk());
   return *this;
 }
 
+void STRING::assign(const char *cstr, int len) {
+  STRING_HEADER* this_header = GetHeader();
+  this_header->used_ = 0;  // dont bother copying data if need to realloc
+  char* this_cstr = ensure_cstr(len + 1);  // +1 for '\0'
+
+  this_header = GetHeader();  // for realloc
+  memcpy(this_cstr, cstr, len);
+  this_cstr[len] = '\0';
+  this_header->used_ = len + 1;
+
+  assert(InvariantOk());
+}
 
 STRING STRING::operator+(const STRING& str) const {
   STRING result(*this);
   result += str;
 
-  CHECK_INVARIANT(this);
+  assert(InvariantOk());
   return result;
 }
 
@@ -443,7 +417,7 @@ STRING STRING::operator+(const char ch) const {
   result_cstr[result_used + 1] = '\0';  // append on '\0'
   ++result_header->used_;
 
-  CHECK_INVARIANT(this);
+  assert(InvariantOk());
   return result;
 }
 
@@ -468,7 +442,7 @@ STRING&  STRING::operator+=(const char *str) {
     this_header->used_ = len;
   }
 
-  CHECK_INVARIANT(this);
+  assert(InvariantOk());
   return *this;
 }
 
@@ -489,6 +463,6 @@ STRING& STRING::operator+=(const char ch) {
   this_cstr[this_used++] = '\0'; // append '\0' after ch
   this_header->used_ = this_used;
 
-  CHECK_INVARIANT(this);
+  assert(InvariantOk());
   return *this;
 }

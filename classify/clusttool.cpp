@@ -46,7 +46,7 @@ History:	6/6/89, DSJ, Created.
 uinT16 ReadSampleSize(FILE *File) {
   int SampleSize;
 
-  if ((fscanf (File, "%d", &SampleSize) != 1) ||
+  if ((tfscanf(File, "%d", &SampleSize) != 1) ||
     (SampleSize < 0) || (SampleSize > MAXSAMPLESIZE))
     DoError (ILLEGALSAMPLESIZE, "Illegal sample size");
   return (SampleSize);
@@ -72,7 +72,7 @@ PARAM_DESC *ReadParamDesc(FILE *File, uinT16 N) {
 
   ParamDesc = (PARAM_DESC *) Emalloc (N * sizeof (PARAM_DESC));
   for (i = 0; i < N; i++) {
-    if (fscanf (File, "%s", Token) != 1)
+    if (tfscanf(File, "%s", Token) != 1)
       DoError (ILLEGALCIRCULARSPEC,
         "Illegal circular/linear specification");
     if (Token[0] == 'c')
@@ -80,15 +80,14 @@ PARAM_DESC *ReadParamDesc(FILE *File, uinT16 N) {
     else
       ParamDesc[i].Circular = FALSE;
 
-    if (fscanf (File, "%s", Token) != 1)
+    if (tfscanf(File, "%s", Token) != 1)
       DoError (ILLEGALESSENTIALSPEC,
         "Illegal essential/non-essential spec");
     if (Token[0] == 'e')
       ParamDesc[i].NonEssential = FALSE;
     else
       ParamDesc[i].NonEssential = TRUE;
-    if (fscanf (File, "%f%f", &(ParamDesc[i].Min), &(ParamDesc[i].Max)) !=
-      2)
+    if (tfscanf(File, "%f%f", &(ParamDesc[i].Min), &(ParamDesc[i].Max)) != 2)
       DoError (ILLEGALMINMAXSPEC, "Illegal min or max specification");
     ParamDesc[i].Range = ParamDesc[i].Max - ParamDesc[i].Min;
     ParamDesc[i].HalfRange = ParamDesc[i].Range / 2;
@@ -119,7 +118,7 @@ PROTOTYPE *ReadPrototype(FILE *File, uinT16 N) {
   int SampleCount;
   int i;
 
-  if ((Status = fscanf (File, "%s", Token)) == 1) {
+  if ((Status = tfscanf(File, "%s", Token)) == 1) {
     Proto = (PROTOTYPE *) Emalloc (sizeof (PROTOTYPE));
     Proto->Cluster = NULL;
     if (Token[0] == 's')
@@ -129,7 +128,7 @@ PROTOTYPE *ReadPrototype(FILE *File, uinT16 N) {
 
     Proto->Style = ReadProtoStyle (File);
 
-    if ((fscanf (File, "%d", &SampleCount) != 1) || (SampleCount < 0))
+    if ((tfscanf(File, "%d", &SampleCount) != 1) || (SampleCount < 0))
       DoError (ILLEGALSAMPLECOUNT, "Illegal sample count");
     Proto->NumSamples = SampleCount;
 
@@ -173,7 +172,7 @@ PROTOTYPE *ReadPrototype(FILE *File, uinT16 N) {
         Proto->Distrib =
           (DISTRIBUTION *) Emalloc (N * sizeof (DISTRIBUTION));
         for (i = 0; i < N; i++) {
-          if (fscanf (File, "%s", Token) != 1)
+          if (tfscanf(File, "%s", Token) != 1)
             DoError (ILLEGALDISTRIBUTION,
               "Illegal prototype distribution");
           switch (Token[0]) {
@@ -213,6 +212,8 @@ PROTOTYPE *ReadPrototype(FILE *File, uinT16 N) {
               Proto->Magnitude.Elliptical[i] = 1.0 /
                 (2.0 * Proto->Variance.Elliptical[i]);
               break;
+            case DISTRIBUTION_COUNT:
+              ASSERT_HOST(!"Distribution count not allowed!");
           }
           Proto->TotalMagnitude *= Proto->Magnitude.Elliptical[i];
         }
@@ -243,7 +244,7 @@ PROTOSTYLE ReadProtoStyle(FILE *File) {
   char Token[TOKENSIZE];
   PROTOSTYLE Style;
 
-  if (fscanf (File, "%s", Token) != 1)
+  if (tfscanf(File, "%s", Token) != 1)
     DoError (ILLEGALSTYLESPEC, "Illegal prototype style specification");
   switch (Token[0]) {
     case 's':
@@ -280,24 +281,25 @@ Return:		Pointer to buffer holding floats or NULL if EOF
 Exceptions:	ILLEGALFLOAT
 History:	6/6/89, DSJ, Created.
 ******************************************************************************/
-FLOAT32 *
-ReadNFloats (FILE * File, uinT16 N, FLOAT32 Buffer[]) {
+FLOAT32* ReadNFloats(FILE * File, uinT16 N, FLOAT32 Buffer[]) {
   int i;
   int NumFloatsRead;
 
   if (Buffer == NULL)
-    Buffer = (FLOAT32 *) Emalloc (N * sizeof (FLOAT32));
+    Buffer = reinterpret_cast<FLOAT32*>(Emalloc(N * sizeof(FLOAT32)));
 
   for (i = 0; i < N; i++) {
-    NumFloatsRead = fscanf (File, "%f", &(Buffer[i]));
+    NumFloatsRead = tfscanf(File, "%f", &(Buffer[i]));
     if (NumFloatsRead != 1) {
-      if ((NumFloatsRead == EOF) && (i == 0))
-        return (NULL);
-      else
-        DoError (ILLEGALFLOAT, "Illegal float specification");
+      if ((NumFloatsRead == EOF) && (i == 0)) {
+        Efree(Buffer);
+        return NULL;
+      } else {
+        DoError(ILLEGALFLOAT, "Illegal float specification");
+      }
     }
   }
-  return (Buffer);
+  return Buffer;
 }                                // ReadNFloats
 
 
@@ -374,6 +376,8 @@ void WritePrototype(FILE *File, uinT16 N, PROTOTYPE *Proto) {
         case D_random:
           fprintf (File, " %9s", "random");
           break;
+        case DISTRIBUTION_COUNT:
+          ASSERT_HOST(!"Distribution count not allowed!");
       }
       fprintf (File, "\n\t");
       WriteNFloats (File, N, Proto->Variance.Elliptical);
@@ -392,13 +396,10 @@ Return:		None
 Exceptions:	None
 History:	6/6/89, DSJ, Created.
 ****************************************************************************/
-void
-WriteNFloats (FILE * File, uinT16 N, FLOAT32 Array[]) {
-  int i;
-
-  for (i = 0; i < N; i++)
-    fprintf (File, " %9.6f", Array[i]);
-  fprintf (File, "\n");
+void WriteNFloats(FILE * File, uinT16 N, FLOAT32 Array[]) {
+  for (int i = 0; i < N; i++)
+    fprintf(File, " %9.6f", Array[i]);
+  fprintf(File, "\n");
 }                                // WriteNFloats
 
 
@@ -479,29 +480,3 @@ void WriteProtoList(
     }
 }	/* WriteProtoList */
 
-/** UniformRandomNumber ********************************************************
-Parameters:	MMin	lower range of uniform distribution
-      MMax	upper range of uniform distribution
-Globals:	None
-Operation:	This routine computes a random number which comes from a
-      uniform distribution over the range from MMin to MMax.
-Return:		Uniform random number
-Exceptions:	None
-History:	6/6/89, DSJ, Created.
-*******************************************************************************/
-FLOAT32 UniformRandomNumber(FLOAT32 MMin, FLOAT32 MMax) {
-  double fake_drand48();
-  FLOAT32 RandomNumber;
-
-  RandomNumber = fake_drand48 ();
-  return (MMin + (RandomNumber * (MMax - MMin)));
-}                                // UniformRandomNumber
-
-
-/** drand48 *************************************************************
-Cheap replacement for drand48 which is not available on the PC.
-**********************************************************************/
-
-double fake_drand48() {
-  return rand () / (RAND_MAX + 1.0);
-}

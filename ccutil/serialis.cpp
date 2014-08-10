@@ -17,96 +17,62 @@
  *
  **********************************************************************/
 
-#include          "mfcpch.h"     //precompiled headers
 #include "serialis.h"
-#include "scanutils.h"
+#include <stdio.h>
 
-/* **************************************************************************
+namespace tesseract {
 
-These are the only routines that write/read data to/from the serialisation.
+TFile::TFile() : offset_(0) {
+}
 
-"serialise_bytes" and "de_serialise_bytes" are used to serialise NON class
-items.  The "make_serialise" macro generates "serialise" and "de_serialise"
-member functions for the class name specified in the macro parameter.
+bool TFile::Open(const STRING& filename, FileReader reader) {
+  offset_ = 0;
+  if (reader == NULL)
+    return LoadDataFromFile(filename, &data_);
+  else
+    return (*reader)(filename, &data_);
+}
 
-************************************************************************** */
+bool TFile::Open(const char* data, int size) {
+  offset_ = 0;
+  data_.init_to_size(size, 0);
+  memcpy(&data_[0], data, size);
+  return true;
+}
 
-DLLSYM void *de_serialise_bytes(FILE *f, int size) {
-  void *ptr;
+bool TFile::Open(FILE* fp, inT64 end_offset) {
+  offset_ = 0;
+  inT64 current_pos = ftell(fp);
+  if (end_offset < 0) {
+    fseek(fp, 0, SEEK_END);
+    end_offset = ftell(fp);
+    fseek(fp, current_pos, SEEK_SET);
+  }
+  int size = end_offset - current_pos;
+  data_.init_to_size(size, 0);
+  return static_cast<int>(fread(&data_[0], 1, size, fp)) == size;
+}
 
-  ptr = alloc_mem (size);
-  /*
-  printf( "De_serialising bytes\n" );
-  printf( "  Addr: %d    Size: %d\n", int(ptr), size );
-  */
-  if (fread (ptr, size, 1, f) != 1)
-    READFAILED.error ("de_serialise_bytes", ABORT, NULL);
-  return ptr;
+char* TFile::FGets(char* buffer, int buffer_size) {
+  int size = 0;
+  while (size + 1 < buffer_size && offset_ < data_.size()) {
+    buffer[size++] = data_[offset_++];
+    if (data_[offset_ - 1] == '\n') break;
+  }
+  if (size < buffer_size) buffer[size] = '\0';
+  return size > 0 ? buffer : NULL;
+}
+
+int TFile::FRead(void* buffer, int size, int count) {
+  char* char_buffer = reinterpret_cast<char*>(buffer);
+  int required_size = size * count;
+  if (data_.size() - offset_ < required_size)
+    required_size = data_.size() - offset_;
+  memcpy(char_buffer, &data_[offset_], required_size);
+  offset_ += required_size;
+  return required_size / size;
 }
 
 
-DLLSYM void serialise_bytes(FILE *f, void *ptr, int size) {
-  /*
-  printf( "Serialising bytes\n" );
-  printf( "  Addr: %d    Size: %d\n", int(ptr), size );
-  */
-  if (fwrite (ptr, size, 1, f) != 1)
-    WRITEFAILED.error ("serialise_bytes", ABORT, NULL);
-}
+}  // namespace tesseract.
 
-
-DLLSYM void serialise_INT32(FILE *f, inT32 the_int) {
-  if (fprintf (f, INT32FORMAT "\n", the_int) < 0)
-    WRITEFAILED.error ("serialise_INT32", ABORT, NULL);
-}
-
-
-DLLSYM inT32 de_serialise_INT32(FILE *f) {
-  inT32 the_int;
-
-  if (fscanf (f, INT32FORMAT, &the_int) != 1)
-    READFAILED.error ("de_serialise_INT32", ABORT, NULL);
-  return the_int;
-}
-
-
-DLLSYM void serialise_FLOAT64(FILE *f, double the_float) {
-  if (fprintf (f, "%g\n", the_float) < 0)
-    WRITEFAILED.error ("serialise_FLOAT64", ABORT, NULL);
-}
-
-
-DLLSYM double de_serialise_FLOAT64(FILE *f) {
-  double the_float;
-
-  if (fscanf (f, "%lg", &the_float) != 1)
-    READFAILED.error ("de_serialise_FLOAT64", ABORT, NULL);
-  return the_float;
-}
-
-
-/**********************************************************************
- * reverse32
- *
- * Byte swap an inT32 or uinT32.
- **********************************************************************/
-
-DLLSYM uinT32 reverse32(            //switch endian
-                        uinT32 num  //number to fix
-                       ) {
-  return (reverse16 ((uinT16) (num & 0xffff)) << 16)
-    | reverse16 ((uinT16) ((num >> 16) & 0xffff));
-}
-
-
-/**********************************************************************
- * reverse16
- *
- * Byte swap an inT16 or uinT16.
- **********************************************************************/
-
-DLLSYM uinT16 reverse16(            //switch endian
-                        uinT16 num  //number to fix
-                       ) {
-  return ((num & 0xff) << 8) | ((num >> 8) & 0xff);
-}

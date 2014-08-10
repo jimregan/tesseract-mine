@@ -25,8 +25,10 @@
 #ifndef VECFUNCS_H
 #define VECFUNCS_H
 
-#include "tessclas.h"
 #include <math.h>
+#include "blobs.h"
+
+struct EDGEPT;
 
 /*----------------------------------------------------------------------
               M a c r o s
@@ -40,8 +42,7 @@
 
 #define point_diff(p,p1,p2)  \
 ((p).x = (p1).x - (p2).x,        \
-	(p).y = (p1).y - (p2).y,        \
-	(p))
+	(p).y = (p1).y - (p2).y)
 
 /**********************************************************************
  * CROSS
@@ -75,17 +76,4 @@
 ----------------------------------------------------------------------*/
 int direction(EDGEPT *point); 
 
-/*
-#if defined(__STDC__) || defined(__cplusplus) || MAC_OR_DOS
-# define	_ARGS(s) s
-#else
-# define	_ARGS(s) ()
-#endif*/
-
-/* vecfuncs.c
-int direction
-  _ARGS((EDGEPT *point));
-
-#undef _ARGS
-*/
 #endif

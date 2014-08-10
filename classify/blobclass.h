@@ -21,8 +21,9 @@
 /**----------------------------------------------------------------------------
           Include Files and Type Defines
 ----------------------------------------------------------------------------**/
+#include "featdefs.h"
 #include "oldlist.h"
-#include "tessclas.h"
+#include "blobs.h"
 
 /*---------------------------------------------------------------------------
           Macros
@@ -38,9 +39,15 @@
 /**----------------------------------------------------------------------------
           Public Function Prototypes
 ----------------------------------------------------------------------------**/
-void InitBlobClassifierVars();
+void LearnBlob(const FEATURE_DEFS_STRUCT &FeatureDefs, const STRING& filename,
+               TBLOB * Blob, const DENORM& bl_denorm, const DENORM& cn_denorm,
+               const INT_FX_RESULT_STRUCT& fx_info,
+               const char* BlobText);
 
-void LearnBlob (TBLOB * Blob, TEXTROW * Row, char BlobText[]);
+void LearnBlob(const FEATURE_DEFS_STRUCT &FeatureDefs, FILE* File, TBLOB* Blob,
+               const DENORM& bl_denorm, const DENORM& cn_denorm,
+               const INT_FX_RESULT_STRUCT& fx_info,
+               const char* BlobText, const char* FontName);
 
 /**----------------------------------------------------------------------------
         Global Data Definitions and Declarations

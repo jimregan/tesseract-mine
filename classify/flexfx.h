@@ -21,14 +21,16 @@
 /**----------------------------------------------------------------------------
           Include Files and Type Defines
 ----------------------------------------------------------------------------**/
-#include "fxdefs.h"
 #include "featdefs.h"
 #include <stdio.h>
 
 /**----------------------------------------------------------------------------
           Public Function Prototypes
 ----------------------------------------------------------------------------**/
-CHAR_DESC ExtractFlexFeatures(TBLOB *Blob, LINE_STATS *LineStats); 
+// As with all TBLOBs this one is also baseline normalized.
+CHAR_DESC ExtractFlexFeatures(const FEATURE_DEFS_STRUCT &FeatureDefs,
+                              TBLOB *Blob, const DENORM& bl_denorm,
+                              const DENORM& cn_denorm,
+                              const INT_FX_RESULT_STRUCT& fx_info);
 
-void InitFlexFXVars(); 
 #endif

@@ -26,15 +26,15 @@
               I n c l u d e s
 ----------------------------------------------------------------------*/
 #include "protos.h"
-#include "debug.h"
 #include "const.h"
 #include "emalloc.h"
 #include "freelist.h"
 #include "callcpp.h"
 #include "tprintf.h"
-#include "adaptmatch.h"
 #include "scanutils.h"
 #include "globals.h"
+#include "classify.h"
+#include "params.h"
 
 #include <stdio.h>
 #include <math.h>
@@ -47,19 +47,19 @@
 ----------------------------------------------------------------------*/
 CLASS_STRUCT TrainingData[NUMBER_OF_CLASSES];
 
-char *TrainingFile;
-
-//extern int LearningDebugLevel;
+STRING_VAR(classify_training_file, "MicroFeatures", "Training file");
 
 /*----------------------------------------------------------------------
               F u n c t i o n s
 ----------------------------------------------------------------------*/
-/**********************************************************************
- * AddConfigToClass
+/**
+ * @name AddConfigToClass
  *
  * Add a new config to this class.  Malloc new space and copy the
  * old configs if necessary.  Return the config id for the new config.
- **********************************************************************/
+ * 
+ * @param Class The class to add to
+ */
 int AddConfigToClass(CLASS_TYPE Class) {
   int NewNumConfigs;
   int NewConfig;
@@ -68,7 +68,7 @@ int AddConfigToClass(CLASS_TYPE Class) {
 
   MaxNumProtos = Class->MaxNumProtos;
 
-  if (NumConfigsIn (Class) >= Class->MaxNumConfigs) {
+  if (Class->NumConfigs >= Class->MaxNumConfigs) {
     /* add configs in CONFIG_INCREMENT chunks at a time */
     NewNumConfigs = (((Class->MaxNumConfigs + CONFIG_INCREMENT) /
       CONFIG_INCREMENT) * CONFIG_INCREMENT);
@@ -79,22 +79,23 @@ int AddConfigToClass(CLASS_TYPE Class) {
 
     Class->MaxNumConfigs = NewNumConfigs;
   }
-  NewConfig = NumConfigsIn (Class);
-  NumConfigsIn (Class)++;
+  NewConfig = Class->NumConfigs++;
   Config = NewBitVector (MaxNumProtos);
-  ConfigIn (Class, NewConfig) = Config;
+  Class->Configurations[NewConfig] = Config;
   zero_all_bits (Config, WordsInVectorOfSize (MaxNumProtos));
 
   return (NewConfig);
 }
 
 
-/**********************************************************************
- * AddProtoToClass
+/**
+ * @name AddProtoToClass
  *
  * Add a new proto to this class.  Malloc new space and copy the
  * old protos if necessary.  Return the proto id for the new proto.
- **********************************************************************/
+ * 
+ * @param Class The class to add to
+ */
 int AddProtoToClass(CLASS_TYPE Class) {
   int i;
   int Bit;
@@ -102,7 +103,7 @@ int AddProtoToClass(CLASS_TYPE Class) {
   int NewProto;
   BIT_VECTOR Config;
 
-  if (NumProtosIn (Class) >= Class->MaxNumProtos) {
+  if (Class->NumProtos >= Class->MaxNumProtos) {
     /* add protos in PROTO_INCREMENT chunks at a time */
     NewNumProtos = (((Class->MaxNumProtos + PROTO_INCREMENT) /
       PROTO_INCREMENT) * PROTO_INCREMENT);
@@ -113,72 +114,79 @@ int AddProtoToClass(CLASS_TYPE Class) {
 
     Class->MaxNumProtos = NewNumProtos;
 
-    for (i = 0; i < NumConfigsIn (Class); i++) {
-      Config = ConfigIn (Class, i);
-      ConfigIn (Class, i) = ExpandBitVector (Config, NewNumProtos);
+    for (i = 0; i < Class->NumConfigs; i++) {
+      Config = Class->Configurations[i];
+      Class->Configurations[i] = ExpandBitVector (Config, NewNumProtos);
 
-      for (Bit = NumProtosIn (Class); Bit < NewNumProtos; Bit++)
+      for (Bit = Class->NumProtos; Bit < NewNumProtos; Bit++)
         reset_bit(Config, Bit);
     }
   }
-  NewProto = NumProtosIn (Class);
-  NumProtosIn (Class)++;
-  if (NumProtosIn(Class) > MAX_NUM_PROTOS) {
+  NewProto = Class->NumProtos++;
+  if (Class->NumProtos > MAX_NUM_PROTOS) {
     tprintf("Ouch! number of protos = %d, vs max of %d!",
-            NumProtosIn(Class), MAX_NUM_PROTOS);
+            Class->NumProtos, MAX_NUM_PROTOS);
   }
   return (NewProto);
 }
 
 
-/**********************************************************************
- * ClassConfigLength
+/**
+ * @name ClassConfigLength
  *
  * Return the length of all the protos in this class.
- **********************************************************************/
+ * 
+ * @param Class The class to add to
+ * @param Config FIXME
+ */
 FLOAT32 ClassConfigLength(CLASS_TYPE Class, BIT_VECTOR Config) {
   inT16 Pid;
   FLOAT32 TotalLength = 0;
 
-  for (Pid = 0; Pid < NumProtosIn (Class); Pid++) {
+  for (Pid = 0; Pid < Class->NumProtos; Pid++) {
     if (test_bit (Config, Pid)) {
 
-      TotalLength += ProtoLength (ProtoIn (Class, Pid));
+      TotalLength += (ProtoIn (Class, Pid))->Length;
     }
   }
   return (TotalLength);
 }
 
 
-/**********************************************************************
- * ClassProtoLength
+/**
+ * @name ClassProtoLength
  *
  * Return the length of all the protos in this class.
- **********************************************************************/
+ * 
+ * @param Class The class to use
+ */
 FLOAT32 ClassProtoLength(CLASS_TYPE Class) {
   inT16 Pid;
   FLOAT32 TotalLength = 0;
 
-  for (Pid = 0; Pid < NumProtosIn (Class); Pid++) {
-    TotalLength += ProtoLength (ProtoIn (Class, Pid));
+  for (Pid = 0; Pid < Class->NumProtos; Pid++) {
+    TotalLength += (ProtoIn (Class, Pid))->Length;
   }
   return (TotalLength);
 }
 
 
-/**********************************************************************
- * CopyProto
+/**
+ * @name CopyProto
  *
  * Copy the first proto into the second.
- **********************************************************************/
+ * 
+ * @param Src Source
+ * @param Dest Destination
+ */
 void CopyProto(PROTO Src, PROTO Dest) {
-  ProtoX (Dest) = ProtoX (Src);
-  ProtoY (Dest) = ProtoY (Src);
-  ProtoLength (Dest) = ProtoLength (Src);
-  ProtoAngle (Dest) = ProtoAngle (Src);
-  CoefficientA (Dest) = CoefficientA (Src);
-  CoefficientB (Dest) = CoefficientB (Src);
-  CoefficientC (Dest) = CoefficientC (Src);
+  Dest->X = Src->X;
+  Dest->Y = Src->Y;
+  Dest->Length = Src->Length;
+  Dest->Angle = Src->Angle;
+  Dest->A = Src->A;
+  Dest->B = Src->B;
+  Dest->C = Src->C;
 }
 
 
@@ -207,7 +215,7 @@ void FillABC(PROTO Proto) {
 void FreeClass(CLASS_TYPE Class) {
   if (Class) {
     FreeClassFields(Class);
-    memfree(Class);
+    delete Class;
   }
 }
 
@@ -224,24 +232,12 @@ void FreeClassFields(CLASS_TYPE Class) {
     if (Class->MaxNumProtos > 0)
       memfree (Class->Prototypes);
     if (Class->MaxNumConfigs > 0) {
-      for (i = 0; i < NumConfigsIn (Class); i++)
-        FreeBitVector (ConfigIn (Class, i));
+      for (i = 0; i < Class->NumConfigs; i++)
+        FreeBitVector (Class->Configurations[i]);
       memfree (Class->Configurations);
     }
   }
 }
-
-
-/**********************************************************************
- * InitPrototypes
- *
- * Initialize anything that needs to be initialized to work with the
- * functions in this file.
- **********************************************************************/
-void InitPrototypes() {
-  string_variable (TrainingFile, "TrainingFile", "MicroFeatures");
-}
-
 
 /**********************************************************************
  * NewClass
@@ -252,7 +248,7 @@ void InitPrototypes() {
 CLASS_TYPE NewClass(int NumProtos, int NumConfigs) {
   CLASS_TYPE Class;
 
-  Class = (CLASS_TYPE) Emalloc (sizeof (CLASS_STRUCT));
+  Class = new CLASS_STRUCT;
 
   if (NumProtos > 0)
     Class->Prototypes = (PROTO) Emalloc (NumProtos * sizeof (PROTO_STRUCT));
@@ -277,197 +273,11 @@ CLASS_TYPE NewClass(int NumProtos, int NumConfigs) {
 void PrintProtos(CLASS_TYPE Class) {
   inT16 Pid;
 
-  for (Pid = 0; Pid < NumProtosIn (Class); Pid++) {
+  for (Pid = 0; Pid < Class->NumProtos; Pid++) {
     cprintf ("Proto %d:\t", Pid);
     PrintProto (ProtoIn (Class, Pid));
     cprintf ("\t");
     PrintProtoLine (ProtoIn (Class, Pid));
     new_line();
-  }
-}
-
-
-/**********************************************************************
- * ReadClassFile
- *
- * Read in the training data from a file.  All of the classes are read
- * in.  The results are stored in the global variable, 'TrainingData'.
- **********************************************************************/
-void ReadClassFile() {
- FILE *File;
- char TextLine[CHARS_PER_LINE];
- char unichar[CHARS_PER_LINE];
-
- cprintf ("Reading training data from '%s' ...", TrainingFile);
- fflush(stdout);
-
- File = open_file (TrainingFile, "r");
- while (fgets (TextLine, CHARS_PER_LINE, File) != NULL) {
-
-   sscanf(TextLine, "%s", unichar);
-   ReadClassFromFile (File, unicharset.unichar_to_id(unichar));
-   fgets(TextLine, CHARS_PER_LINE, File);
-   fgets(TextLine, CHARS_PER_LINE, File);
- }
- fclose(File);
- new_line();
-}
-
-/**********************************************************************
- * ReadClassFromFile
- *
- * Read in a class description (protos and configs) from a file.  Update
- * the class structure record.
- **********************************************************************/
-void ReadClassFromFile(FILE *File, UNICHAR_ID unichar_id) {
-  CLASS_TYPE Class;
-
-  Class = &TrainingData[unichar_id];
-
-  ReadProtos(File, Class);
-
-  ReadConfigs(File, Class);
-}
-
-/**********************************************************************
- * ReadConfigs
- *
- * Read the prototype configurations for this class from a file.  Read
- * the requested number of lines.
- **********************************************************************/
-void ReadConfigs(register FILE *File, CLASS_TYPE Class) {
-  inT16 Cid;
-  register inT16 Wid;
-  register BIT_VECTOR ThisConfig;
-  int NumWords;
-  int NumConfigs;
-
-  fscanf (File, "%d %d\n", &NumConfigs, &NumWords);
-  NumConfigsIn (Class) = NumConfigs;
-  Class->MaxNumConfigs = NumConfigs;
-  Class->Configurations =
-    (CONFIGS) Emalloc (sizeof (BIT_VECTOR) * NumConfigs);
-  NumWords = WordsInVectorOfSize (NumProtosIn (Class));
-
-  for (Cid = 0; Cid < NumConfigs; Cid++) {
-
-    ThisConfig = NewBitVector (NumProtosIn (Class));
-    for (Wid = 0; Wid < NumWords; Wid++)
-      fscanf (File, "%x", &ThisConfig[Wid]);
-    ConfigIn (Class, Cid) = ThisConfig;
-  }
-}
-
-
-/**********************************************************************
- * ReadProtos
- *
- * Read in all the prototype information from a file.  Read the number
- * of lines requested.
- **********************************************************************/
-void ReadProtos(register FILE *File, CLASS_TYPE Class) {
-  register inT16 Pid;
-  register PROTO Proto;
-  int NumProtos;
-
-  fscanf (File, "%d\n", &NumProtos);
-  NumProtosIn (Class) = NumProtos;
-  Class->MaxNumProtos = NumProtos;
-  Class->Prototypes = (PROTO) Emalloc (sizeof (PROTO_STRUCT) * NumProtos);
-
-  for (Pid = 0; Pid < NumProtos; Pid++) {
-    Proto = ProtoIn (Class, Pid);
-    fscanf (File, "%f %f %f %f %f %f %f\n",
-      &ProtoX (Proto),
-      &ProtoY (Proto),
-      &ProtoLength (Proto),
-      &ProtoAngle (Proto),
-      &CoefficientA (Proto),
-      &CoefficientB (Proto), &CoefficientC (Proto));
-  }
-}
-
-
-/**********************************************************************
- * SplitProto
- *
- * Add a new proto to this class.  Malloc new space and copy the
- * old protos if necessary.  Return the proto id for the new proto.
- * Update all configurations so that each config which contained the
- * specified old proto will also contain the new proto.  The caller
- * is responsible for actually filling in the appropriate proto params.
- **********************************************************************/
-int SplitProto(CLASS_TYPE Class, int OldPid) {
-  int i;
-  int NewPid;
-  BIT_VECTOR Config;
-
-  NewPid = AddProtoToClass (Class);
-
-  for (i = 0; i < NumConfigsIn (Class); i++) {
-    Config = ConfigIn (Class, i);
-    if (test_bit (Config, OldPid))
-      SET_BIT(Config, NewPid);
-  }
-  return (NewPid);
-}
-
-
-/**********************************************************************
- * WriteOldConfigFile
- *
- * Write the configs in the given class to the specified file in the
- * old config format.
- **********************************************************************/
-void WriteOldConfigFile(FILE *File, CLASS_TYPE Class) {
-  int Cid, Pid;
-  BIT_VECTOR Config;
-
-  fprintf (File, "%d %d\n", NumConfigsIn (Class), NumProtosIn (Class));
-
-  for (Cid = 0; Cid < NumConfigsIn (Class); Cid++) {
-    fprintf (File, "1 ");
-
-    Config = ConfigIn (Class, Cid);
-
-    for (Pid = 0; Pid < NumProtosIn (Class); Pid++) {
-      if (test_bit (Config, Pid))
-        fprintf (File, "1");
-      else
-        fprintf (File, "0");
-    }
-    fprintf (File, "\n");
-  }
-}
-
-
-/**********************************************************************
- * WriteOldProtoFile
- *
- * Write the protos in the given class to the specified file in the
- * old proto format.
- **********************************************************************/
-void WriteOldProtoFile(FILE *File, CLASS_TYPE Class) {
-  int Pid;
-  PROTO Proto;
-
-  /* print old header */
-  fprintf (File, "6\n");
-  fprintf (File, "linear   essential      -0.500000   0.500000\n");
-  fprintf (File, "linear   essential      -0.250000   0.750000\n");
-  fprintf (File, "linear   essential       0.000000   1.000000\n");
-  fprintf (File, "circular essential       0.000000   1.000000\n");
-  fprintf (File, "linear   non-essential  -0.500000   0.500000\n");
-  fprintf (File, "linear   non-essential  -0.500000   0.500000\n");
-
-  for (Pid = 0; Pid < NumProtosIn (Class); Pid++) {
-    Proto = ProtoIn (Class, Pid);
-
-    fprintf (File, "significant   elliptical   1\n");
-    fprintf (File, "     %9.6f %9.6f %9.6f %9.6f %9.6f %9.6f\n",
-      ProtoX (Proto), ProtoY (Proto),
-      ProtoLength (Proto), ProtoAngle (Proto), 0.0, 0.0);
-    fprintf (File, "     %9.6f %9.6f %9.6f %9.6f %9.6f %9.6f\n",
-      0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001);
   }
 }

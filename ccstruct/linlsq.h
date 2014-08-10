@@ -17,86 +17,118 @@
  *
  **********************************************************************/
 
-#ifndef           LINLSQ_H
-#define           LINLSQ_H
+#ifndef TESSERACT_CCSTRUCT_LINLSQ_H_
+#define TESSERACT_CCSTRUCT_LINLSQ_H_
 
-#include          "points.h"
-#include          "mod128.h"
-#include          "varable.h"
+#include "points.h"
+#include "params.h"
 
-class LLSQ
-{
-  friend class PDLSQ;            //pos & direction
+class LLSQ {
+ public:
+  LLSQ() {  // constructor
+    clear();  // set to zeros
+  }
+  void clear();  // initialize
 
-  public:
-    LLSQ() {  //constructor
-      clear();  //set to zeros
-    }
-    void clear();  //initialize
+  // Adds an element with a weight of 1.
+  void add(double x, double y);
+  // Adds an element with a specified weight.
+  void add(double x, double y, double weight);
+  // Adds a whole LLSQ.
+  void add(const LLSQ& other);
+  // Deletes an element with a weight of 1.
+  void remove(double x, double y);
+  inT32 count() const {  // no of elements
+    return static_cast<int>(total_weight + 0.5);
+  }
 
-    void add(           //add element
-             double x,  //coords to add
-             double y);
-    void remove(           //delete element
-                double x,  //coords to delete
-                double y);
-    inT32 count() {  //no of elements
-      return n;
-    }
+  double m() const;  // get gradient
+  double c(double m) const;            // get constant
+  double rms(double m, double c) const;            // get error
+  double pearson() const;  // get correlation coefficient.
 
-    double m();  //get gradient
-    double c(            //get constant
-             double m);  //gradient
-    double rms(            //get error
-               double m,   //gradient
-               double c);  //constant
-    double spearman();  //get error
+  // Returns the x,y means as an FCOORD.
+  FCOORD mean_point() const;
 
-  private:
-    inT32 n;                     //no of elements
-    double sigx;                 //sum of x
-    double sigy;                 //sum of y
-    double sigxx;                //sum x squared
-    double sigxy;                //sum of xy
-    double sigyy;                //sum y squared
+  // Returns the average sum of squared perpendicular error from a line
+  // through mean_point() in the direction dir.
+  double rms_orth(const FCOORD &dir) const;
+
+  // Returns the direction of the fitted line as a unit vector, using the
+  // least mean squared perpendicular distance. The line runs through the
+  // mean_point, i.e. a point p on the line is given by:
+  // p = mean_point() + lambda * vector_fit() for some real number lambda.
+  // Note that the result (0<=x<=1, -1<=y<=-1) is directionally ambiguous
+  // and may be negated without changing its meaning, since a line is only
+  // unique to a range of pi radians.
+  // Modernists prefer to think of this as an Eigenvalue problem, but
+  // Pearson had the simple solution in 1901.
+  //
+  // Note that this is equivalent to returning the Principal Component in PCA,
+  // or the eigenvector corresponding to the largest eigenvalue in the
+  // covariance matrix.
+  FCOORD vector_fit() const;
+
+  // Returns the covariance.
+  double covariance() const {
+    if (total_weight > 0.0)
+      return (sigxy - sigx * sigy / total_weight) / total_weight;
+    else
+      return 0.0;
+  }
+  double x_variance() const {
+    if (total_weight > 0.0)
+      return (sigxx - sigx * sigx / total_weight) / total_weight;
+    else
+      return 0.0;
+  }
+  double y_variance() const {
+    if (total_weight > 0.0)
+      return (sigyy - sigy * sigy / total_weight) / total_weight;
+    else
+      return 0.0;
+  }
+
+ private:
+  double total_weight;         // no of elements or sum of weights.
+  double sigx;                 // sum of x
+  double sigy;                 // sum of y
+  double sigxx;                // sum x squared
+  double sigxy;                // sum of xy
+  double sigyy;                // sum y squared
 };
 
-class PDLSQ
-{
-  public:
-    PDLSQ() {  //constructor
-      clear();  //set to zeros
-    }
-    void clear() {  //initialize
-      pos.clear ();              //clear both
-      dir.clear ();
-    }
 
-    void add(                         //add element
-             const ICOORD &addpos,    //position of pt
-             const ICOORD &adddir) {  //dir of pt
-      pos.add (addpos.x (), addpos.y ());
-      dir.add (adddir.x (), adddir.y ());
+// Returns the median value of the vector, given that the values are
+// circular, with the given modulus. Values may be signed or unsigned,
+// eg range from -pi to pi (modulus 2pi) or from 0 to 2pi (modulus 2pi).
+// NOTE that the array is shuffled, but the time taken is linear.
+// An assumption is made that most of the values are spread over no more than
+// half the range, but wrap-around is accounted for if the median is near
+// the wrap-around point.
+// Cannot be a member of GenericVector, as it makes heavy used of LLSQ.
+// T must be an integer or float/double type.
+template<typename T> T MedianOfCircularValues(T modulus, GenericVector<T>* v) {
+  LLSQ stats;
+  T halfrange = static_cast<T>(modulus / 2);
+  int num_elements = v->size();
+  for (int i = 0; i < num_elements; ++i) {
+    stats.add((*v)[i], (*v)[i] + halfrange);
+  }
+  bool offset_needed = stats.y_variance() < stats.x_variance();
+  if (offset_needed) {
+    for (int i = 0; i < num_elements; ++i) {
+      (*v)[i] += halfrange;
     }
-    void remove(                            //remove element
-                const ICOORD &removepos,    //position of pt
-                const ICOORD &removedir) {  //dir of pt
-      pos.remove (removepos.x (), removepos.y ());
-      dir.remove (removedir.x (), removedir.y ());
+  }
+  int median_index = v->choose_nth_item(num_elements / 2);
+  if (offset_needed) {
+    for (int i = 0; i < num_elements; ++i) {
+      (*v)[i] -= halfrange;
     }
-    inT32 count() {  //no of elements
-      return pos.count ();
-    }
+  }
+  return (*v)[median_index];
+}
 
-    float fit(                 //get fit parameters
-              DIR128 &ang,     //output angle
-              float &sin_ang,  //output components
-              float &cos_ang,
-              float &r);
 
-  private:
-    LLSQ pos;                    //position
-    LLSQ dir;                    //directions
-};
-extern double_VAR_H (pdlsq_posdir_ratio, 0.4e-6, "Mult of dir to cf pos");
-#endif
+#endif  // TESSERACT_CCSTRUCT_LINLSQ_H_

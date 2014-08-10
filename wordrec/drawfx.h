@@ -20,8 +20,7 @@
 #ifndef           DRAWFX_H
 #define           DRAWFX_H
 
-#include          "varable.h"
-#include          "notdll.h"
+#include          "params.h"
 #include	  "scrollview.h"
 
 extern STRING_VAR_H (fx_debugfile, DEBUG_WIN_NAME, "Name of debugfile");

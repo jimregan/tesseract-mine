@@ -59,10 +59,6 @@ class DLLSYM CLIST_LINK
     const CLIST_LINK &) {
       data = next = NULL;
     }
-
-    NEWDELETE2 (CLIST_LINK)
-    /* NOTE that none of the serialise member functions are required for
-    CLIST_LINKS as they are never serialised. */
 };
 
 /**********************************************************************
@@ -96,12 +92,12 @@ class DLLSYM CLIST
     void shallow_clear();  //clear list but dont
     //delete data elements
 
-    BOOL8 empty() {  //is list empty?
+    bool empty() const {  //is list empty?
       return !last;
     }
 
-    BOOL8 singleton() {
-      return last != NULL ? (last == last->next) : FALSE;
+    bool singleton() const {
+      return last != NULL ? (last == last->next) : false;
     }
 
     void shallow_copy(                     //dangerous!!
@@ -109,37 +105,34 @@ class DLLSYM CLIST
       last = from_list->last;
     }
 
-                                 //ptr to copier functn
-    void internal_deep_copy (void *(*copier) (void *),
-      const CLIST * list);       //list being copied
-
     void assign_to_sublist(                           //to this list
                            CLIST_ITERATOR *start_it,  //from list start
                            CLIST_ITERATOR *end_it);   //from list end
 
-    inT32 length();  //# elements in list
+    inT32 length() const;  //# elements in list
 
     void sort (                  //sort elements
       int comparator (           //comparison routine
       const void *, const void *));
 
-    void internal_dump (         //serialise each elem
-      FILE * f,                  //to this file
-      void element_serialiser (  //using this function
-      FILE *, void *));
+    // Assuming list has been sorted already, insert new_data to
+    // keep the list sorted according to the same comparison function.
+    // Comparision function is the same as used by sort, i.e. uses double
+    // indirection. Time is O(1) to add to beginning or end.
+    // Time is linear to add pre-sorted items to an empty list.
+    // If unique, then don't add duplicate entries.
+    // Returns true if the element was added to the list.
+    bool add_sorted(int comparator(const void*, const void*),
+                    bool unique, void* new_data);
 
-    void internal_de_dump (      //de_serial each elem
-      FILE * f,                  //from this file
-      void *element_de_serialiser (//using this function
-      FILE *));
+    // Assuming that the minuend and subtrahend are already sorted with
+    // the same comparison function, shallow clears this and then copies
+    // the set difference minuend - subtrahend to this, being the elements
+    // of minuend that do not compare equal to anything in subtrahend.
+    // If unique is true, any duplicates in minuend are also eliminated.
+    void set_subtract(int comparator(const void*, const void*), bool unique,
+                      CLIST* minuend, CLIST* subtrahend);
 
-    void prep_serialise();  //change last to count
-
-    /*  Note that dump() and de_dump() are not required as calls to dump/de_dump a
-      list class should be handled by a class derived from this.
-
-      make_serialise is not required for a similar reason.
-    */
 };
 
 /***********************************************************************
@@ -198,7 +191,7 @@ class DLLSYM CLIST_ITERATOR
                          CLIST *list_to_add);  //move to it 1st item
 
     void *data() {  //get current data
-    #ifdef _DEBUG
+    #ifndef NDEBUG
       if (!list)
         NO_LIST.error ("CLIST_ITERATOR::data", ABORT, NULL);
       if (!current)
@@ -221,7 +214,7 @@ class DLLSYM CLIST_ITERATOR
     void mark_cycle_pt();  //remember current
 
     BOOL8 empty() {  //is list empty?
-    #ifdef _DEBUG
+    #ifndef NDEBUG
       if (!list)
         NO_LIST.error ("CLIST_ITERATOR::empty", ABORT, NULL);
     #endif
@@ -261,7 +254,7 @@ class DLLSYM CLIST_ITERATOR
 
 inline void CLIST_ITERATOR::set_to_list(  //change list
                                         CLIST *list_to_iterate) {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST_ITERATOR::set_to_list", ABORT, NULL);
   if (!list_to_iterate)
@@ -302,7 +295,7 @@ inline void CLIST_ITERATOR::add_after_then_move(  // element to add
                                                 void *new_data) {
   CLIST_LINK *new_element;
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST_ITERATOR::add_after_then_move", ABORT, NULL);
   if (!list)
@@ -352,7 +345,7 @@ inline void CLIST_ITERATOR::add_after_stay_put(  // element to add
                                                void *new_data) {
   CLIST_LINK *new_element;
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST_ITERATOR::add_after_stay_put", ABORT, NULL);
   if (!list)
@@ -405,7 +398,7 @@ inline void CLIST_ITERATOR::add_before_then_move(  // element to add
                                                  void *new_data) {
   CLIST_LINK *new_element;
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST_ITERATOR::add_before_then_move", ABORT, NULL);
   if (!list)
@@ -452,7 +445,7 @@ inline void CLIST_ITERATOR::add_before_stay_put(  // element to add
                                                 void *new_data) {
   CLIST_LINK *new_element;
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST_ITERATOR::add_before_stay_put", ABORT, NULL);
   if (!list)
@@ -497,7 +490,7 @@ inline void CLIST_ITERATOR::add_before_stay_put(  // element to add
  **********************************************************************/
 
 inline void CLIST_ITERATOR::add_list_after(CLIST *list_to_add) {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST_ITERATOR::add_list_after", ABORT, NULL);
   if (!list)
@@ -547,7 +540,7 @@ inline void CLIST_ITERATOR::add_list_after(CLIST *list_to_add) {
  **********************************************************************/
 
 inline void CLIST_ITERATOR::add_list_before(CLIST *list_to_add) {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST_ITERATOR::add_list_before", ABORT, NULL);
   if (!list)
@@ -597,7 +590,7 @@ inline void CLIST_ITERATOR::add_list_before(CLIST *list_to_add) {
 inline void *CLIST_ITERATOR::extract() {
   void *extracted_data;
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST_ITERATOR::extract", ABORT, NULL);
   if (!list)
@@ -608,23 +601,21 @@ inline void *CLIST_ITERATOR::extract() {
       ABORT, NULL);
   #endif
 
-  if (list->singleton ())        //special case where
-                                 //we do need to
+  if (list->singleton()) {
+    // Special case where we do need to change the iterator.
     prev = next = list->last = NULL;
-  //      change the iterator
-  else {
+  } else {
     prev->next = next;           //remove from list
 
     if (current == list->last) {
       list->last = prev;
       ex_current_was_last = TRUE;
-    }
-    else
+    } else {
       ex_current_was_last = FALSE;
-
-    ex_current_was_cycle_pt = (current == cycle_pt) ? TRUE : FALSE;
-
+    }
   }
+  // Always set ex_current_was_cycle_pt so an add/forward will work in a loop.
+  ex_current_was_cycle_pt = (current == cycle_pt) ? TRUE : FALSE;
   extracted_data = current->data;
   delete(current);  //destroy CONS cell
   current = NULL;
@@ -640,7 +631,7 @@ inline void *CLIST_ITERATOR::extract() {
  **********************************************************************/
 
 inline void *CLIST_ITERATOR::move_to_first() {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST_ITERATOR::move_to_first", ABORT, NULL);
   if (!list)
@@ -650,7 +641,7 @@ inline void *CLIST_ITERATOR::move_to_first() {
   current = list->First ();
   prev = list->last;
   next = current != NULL ? current->next : NULL;
-  return current->data;
+  return current != NULL ? current->data : NULL;
 }
 
 
@@ -666,7 +657,7 @@ inline void *CLIST_ITERATOR::move_to_first() {
  **********************************************************************/
 
 inline void CLIST_ITERATOR::mark_cycle_pt() {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST_ITERATOR::mark_cycle_pt", ABORT, NULL);
   if (!list)
@@ -689,7 +680,7 @@ inline void CLIST_ITERATOR::mark_cycle_pt() {
  **********************************************************************/
 
 inline BOOL8 CLIST_ITERATOR::at_first() {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST_ITERATOR::at_first", ABORT, NULL);
   if (!list)
@@ -711,7 +702,7 @@ inline BOOL8 CLIST_ITERATOR::at_first() {
  **********************************************************************/
 
 inline BOOL8 CLIST_ITERATOR::at_last() {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST_ITERATOR::at_last", ABORT, NULL);
   if (!list)
@@ -733,7 +724,7 @@ inline BOOL8 CLIST_ITERATOR::at_last() {
  **********************************************************************/
 
 inline BOOL8 CLIST_ITERATOR::cycled_list() {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST_ITERATOR::cycled_list", ABORT, NULL);
   if (!list)
@@ -753,7 +744,7 @@ inline BOOL8 CLIST_ITERATOR::cycled_list() {
  **********************************************************************/
 
 inline inT32 CLIST_ITERATOR::length() {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST_ITERATOR::length", ABORT, NULL);
   if (!list)
@@ -775,7 +766,7 @@ inline void
 CLIST_ITERATOR::sort (           //sort elements
 int comparator (                 //comparison routine
 const void *, const void *)) {
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST_ITERATOR::sort", ABORT, NULL);
   if (!list)
@@ -801,7 +792,7 @@ inline void CLIST_ITERATOR::add_to_end(  // element to add
                                        void *new_data) {
   CLIST_LINK *new_element;
 
-  #ifdef _DEBUG
+  #ifndef NDEBUG
   if (!this)
     NULL_OBJECT.error ("CLIST_ITERATOR::add_to_end", ABORT, NULL);
   if (!list)
@@ -852,8 +843,6 @@ The macro generates:
   - An element deletion function:      CLASSNAME##_c1_zapper
   - An element copier function:
               CLASSNAME##_c1_copier
-  - An element serialiser function"    CLASSNAME##_c1_serialiser
-  - An element de-serialiser function" CLASSNAME##_c1_de_serialiser
   - A CLIST subclass:		CLASSNAME##_CLIST
   - A CLIST_ITERATOR subclass:
               CLASSNAME##_C_IT
@@ -861,22 +850,16 @@ The macro generates:
 NOTE: Generated names do NOT clash with those generated by ELISTIZE,
 ELIST2ISE and CLIST2IZE
 
-Four macros are provided: CLISTIZE, CLISTIZE_S, CLISTIZEH and CLISTIZEH_S
+Two macros are provided: CLISTIZE and CLISTIZEH
 The ...IZEH macros just define the class names for use in .h files
 The ...IZE macros define the code use in .c files
-The _S versions define lists which can be serialised.  They assume that the
-make_serialise() macro is used in the list element class to define
-serialise() and de_serialise() members for the list elements.
-This, in turn, assumes that the list element class has prep_serialise()
-dump() and de_dump() member functions.
 ***********************************************************************/
 
 /***********************************************************************
-  CLISTIZEH( CLASSNAME )  and  CLISTIZEH_S( CLASSNAME ) MACROS
+  CLISTIZEH( CLASSNAME )  MACRO
 
-These macros are constructed from 3 fragments CLISTIZEH_A, CLISTIZEH_B and
-CLISTIZEH_C.  CLISTIZEH is simply a concatenation of these parts.
-CLISTIZEH_S has some additional bits thrown in the gaps.
+CLISTIZEH is a concatenation of 3 fragments CLISTIZEH_A, CLISTIZEH_B and
+CLISTIZEH_C.
 ***********************************************************************/
 
 #define CLISTIZEH_A( CLASSNAME )												\
@@ -909,10 +892,6 @@ public:																			\
 																				\
 void						deep_clear()				/* delete elements */	\
 	{ CLIST::internal_deep_clear( &CLASSNAME##_c1_zapper ); }					\
-																				\
-void						deep_copy(					/* become a deep */		\
-	const CLASSNAME##_CLIST*list)						/* copy of src list*/	\
-	{ CLIST::internal_deep_copy( &CLASSNAME##_c1_copier, list ); }				\
 																				\
 void						operator=(					/* prevent assign */	\
 	const CLASSNAME##_CLIST&)													\
@@ -964,42 +943,16 @@ public:																			\
 		{ return (CLASSNAME*) CLIST_ITERATOR::move_to_last(); }				\
 };
 
-#define CLISTIZEH( CLASSNAME )													\
-																				\
-CLISTIZEH_A( CLASSNAME )														\
-																				\
-CLISTIZEH_B( CLASSNAME )														\
-																				\
-CLISTIZEH_C( CLASSNAME )
-
-#define CLISTIZEH_S( CLASSNAME )												\
-																				\
-CLISTIZEH_A( CLASSNAME )														\
-																				\
-extern DLLSYM void			CLASSNAME##_c1_serialiser(							\
-FILE*						f,													\
-void*						element);											\
-																				\
-extern DLLSYM void*			CLASSNAME##_c1_de_serialiser(						\
-FILE*						f);													\
-																				\
-CLISTIZEH_B( CLASSNAME )														\
-																				\
-	void					dump(						/* dump to file */		\
-	FILE*					f)													\
-	{ CLIST::internal_dump( f, &CLASSNAME##_c1_serialiser );}					\
-																				\
-	void					de_dump(					/* get from file */		\
-	FILE*					f)													\
-	{ CLIST::internal_de_dump( f, &CLASSNAME##_c1_de_serialiser );}				\
-																				\
-make_serialise( CLASSNAME##_CLIST )												\
-																				\
+#define CLISTIZEH( CLASSNAME )						\
+									\
+CLISTIZEH_A( CLASSNAME )						\
+									\
+CLISTIZEH_B( CLASSNAME )						\
+									\
 CLISTIZEH_C( CLASSNAME )
 
 /***********************************************************************
-  CLISTIZE( CLASSNAME )  and   CLISTIZE_S( CLASSNAME )  MACROS
-CLISTIZE_S is a simple extension to CLISTIZE
+  CLISTIZE( CLASSNAME )  MACRO
 ***********************************************************************/
 
 #define CLISTIZE( CLASSNAME )													\
@@ -1018,61 +971,5 @@ void*						link)						/*link to delete*/		\
 {																				\
 delete (CLASSNAME *) link;														\
 }																				\
-																				\
-																				\
-																				\
-/***********************************************************************		\
-*							CLASSNAME##_c1_copier								\
-*																				\
-*  A function which can generate a new, deep copy of a CLASSNAME element.		\
-*  This is passed to the generic deep copy list member function so that when	\
-*  a list is copied the elements on the list are properly copied from the		\
-*  base class, even though we dont use a virtual function.						\
-*																				\
-**********************************************************************/			\
-																				\
-DLLSYM void*				CLASSNAME##_c1_copier(		/*deep copy a link*/	\
-void*						old_element)				/*source link*/			\
-{																				\
-	CLASSNAME*			new_element;										\
-																				\
-new_element = new CLASSNAME;													\
-*new_element = *((CLASSNAME*) old_element);									\
-return (void*) new_element;														\
-}
 
-#define CLISTIZE_S( CLASSNAME )													\
-																				\
-CLISTIZE( CLASSNAME )															\
-																				\
-/***********************************************************************		\
-*							CLASSNAME##_c1_serialiser							\
-*																				\
-*  A function which can serialise an element									\
-*  This is passed to the generic dump member function so that when a list is	\
-*  serialised the elements on the list are properly serialised.					\
-**********************************************************************/			\
-																				\
-DLLSYM void					CLASSNAME##_c1_serialiser(							\
-FILE*						f,													\
-void*						element)											\
-{																				\
-((CLASSNAME*) element)->serialise( f );										\
-}																				\
-																				\
-																				\
-																				\
-/***********************************************************************		\
-*							CLASSNAME##_c1_de_serialiser						\
-*																				\
-*  A function which can de-serialise an element									\
-*  This is passed to the generic de-dump member function so that when a list	\
-*  is de-serialised the elements on the list are properly de-serialised.		\
-**********************************************************************/			\
-																				\
-DLLSYM void*				CLASSNAME##_c1_de_serialiser(						\
-FILE*						f)													\
-{																				\
-return CLASSNAME::de_serialise( f );											\
-}
 #endif

@@ -11,7 +11,12 @@
 // - A LMB click either draws point-to-point, point or text.
 // - A LMB dragging either draws a line, a rectangle or ellipse.
 
+// Include automatically generated configuration file if running autoconf.
+#ifdef HAVE_CONFIG_H
+#include "config_auto.h"
+#endif
 
+#ifndef GRAPHICS_DISABLED
 #include "scrollview.h"
 #include "svmnode.h"
 #include <stdlib.h>
@@ -22,7 +27,7 @@ int rgb[3] = { 255, 255, 255 };
 
 class SVPaint : public SVEventHandler {
  public:
-   SVPaint(const char* server_name);
+   explicit SVPaint(const char* server_name);
 // This is the main event handling function that we need to overwrite, defined
 // in SVEventHandler.
    void Notify(const SVEvent* sv_event);
@@ -121,7 +126,7 @@ void SVPaint::ClickHandler(const SVEvent* sv_event) {
     // finally delete the input pointer.
     char* p = window_->ShowInputDialog("Text:");
     window_->Text(sv_event->x, sv_event->y, p);
-    delete p;
+    delete [] p;
     break;
   }
 }
@@ -218,3 +223,4 @@ int main(int argc, char** argv) {
 	if (argc > 1) { server_name = argv[1]; } else { server_name = "localhost"; }
 	SVPaint svp(server_name);
 }
+#endif  // GRAPHICS_DISABLED
